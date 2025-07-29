@@ -4,18 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Landing Page</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <nav>
-        <a href="budget_planner">Home</a>
-        <a href="TO DO">Budget Planner</a>
-        <a href="TO DO" id="login">Login</a>
-        <a>News</a>
-        
-    </nav>
+    <header class="top-header">
+        <img src="imgs/Hamburger_icon.svg" height="30px" class="hamburger">
+        <a href="#" class="login-button">Login</a>
+    </header>
+
+    <div id="sidebar" class="sidebar closed">
+        <a class="active">Home</a>
+        <a href="#">Budget Planner</a>
+        <a href="#">LINK 1</a>
+        <a href="#">LINK 2</a>
+    </div>
+    
+
+    <section id="center-content">
+        <div id="center-text">
+            <h2 style="font-size: 50px;">Title of website</h2>
+            <h4> hey, so this is a finance app, to budget and stuff like that</h3>
+        </div>
+    </section>
 
 
     <script src="server.js"></script>
+    <script src="index.js"></script>
 </body>
 </html>
