@@ -1,0 +1,25 @@
+nav{
+    display: flex;
+    background-color: rgb(79, 196, 97);
+    padding:10px;
+    border-color: grey;
+    margin: 0px;
+    justify-content: space-between; /*fix this */
+
+}
+
+nav a{
+    display: block;
+    color: black;
+    font-family: Arial, Helvetica, sans-serif;
+    text-decoration: none;
+}
+
+nav a:hover{
+    background-color: white;
+    margin: 0px;
+}
+
+#login{
+    float:right;
+}
