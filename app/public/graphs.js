@@ -1,33 +1,65 @@
-const savings_data = {
-    labels: ['Rent', 'Food', 'Utilities', 'Entertainment', 'Investments'],
-    datasets: [{
-        label: 'Expenses' ,
-        data: [100,300,120,200,300],
-        backgroundColor: [
-        'rgba(249, 148, 170, 0.8)',
-        'rgba(188, 228, 255, 0.78)',
-        'rgba(255, 245, 219, 0.93)',
-        'rgba(184, 255, 243, 0.82)',
-        'rgba(194, 164, 255, 0.85)'
-        ]
-    }]
-};
+const pastelColors = [
+    'rgba(249, 148, 170, 0.8)',
+    'rgba(188, 228, 255, 0.78)',
+    'rgba(255, 245, 219, 0.93)',
+    'rgba(184, 255, 243, 0.82)',
+    'rgba(194, 164, 255, 0.85)',
+    'rgba(225, 125, 232, 0.89)',  // template with pastels cause I fw the colors
+    'rgba(249, 216, 251, 0.92)',
+    'rgba(255, 231, 176, 0.87)'
+];
 
-const doughnut_config = {
-    type: 'doughnut',
-    data: savings_data,
-    options: {
-        responsive: true,
-        plugins: {
-            legend: {
-                position: 'top',
-            },
-            title: {
-                display: true,
-                text: 'Savings Plan'
+
+const best_performing = document.getElementById('best_performing');
+const stock_history = document.getElementById('stocks_history');
+
+
+
+async function loadSavingsData() {
+    try {
+        const savings_plan = document.getElementById('savings_plan');
+        const response = await fetch('/expenses');
+        if (!response.ok) throw new Error('Did not get expenses correctly');
+        
+        const savingsArray = await response.json();
+
+        const labels = savingsArray.map(item => item.category);
+        const data = savingsArray.map(item => item.amount);
+        const backgroundColor = pastelColors.slice(0,labels.length);
+
+        const savings_data = {
+            labels : labels,
+            datasets: [{
+                label: 'Expenses' ,
+                data: data,
+                backgroundColor: backgroundColor
+            }]
+        };
+
+        const doughnut_config = {
+            type: 'doughnut',
+            data: savings_data,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: true,
+                        text: 'Savings Plan'
+                    }
+                }
             }
+        };
+
+            new Chart(savings_plan, doughnut_config);
+        } catch (err) {
+            console.error('Failed to load savings ', err);
         }
-    },
+
+
+            
 };
 
 const labels = ['A', 'B', 'C', 'D', 'E']; // custom labels
@@ -114,13 +146,7 @@ const line_config = {
 };
 
 
-
-const savings_plan = document.getElementById('savings_plan');
-const best_performing = document.getElementById('best_performing');
-const stock_history = document.getElementById('stocks_history');
-
-
-new Chart(savings_plan, doughnut_config);
+loadSavingsData();
 new Chart(best_performing, bar_config);
 new Chart(stock_history, line_config);
 

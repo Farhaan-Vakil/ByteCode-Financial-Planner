@@ -5,7 +5,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "cd app && node server.js",
-    "setup": "psql -U your_username -d LoginData -f setup.sql"
+    "setup": "psql -U your_username -d LoginData -f setup.sql",
+    "start-joey": "cd app && node joey_server.js"
   },
   "keywords": [],
   "author": "",
@@ -13,6 +14,7 @@
   "description": "",
   "dependencies": {
     "chart.js": "^4.5.0",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "pg": "^8.16.3"
   }
 }
