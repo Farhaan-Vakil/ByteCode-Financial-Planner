@@ -4,7 +4,7 @@
   "main": "budget.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "cd app && node server.js"
+    "start": "cd app && node server.js",
     "setup": "psql -U your_username -d LoginData -f setup.sql"
   },
   "keywords": [],
@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "finnhub": "^2.0.7"
   }
 }
