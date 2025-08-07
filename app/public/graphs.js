@@ -10,12 +10,12 @@ const pastelColors = [
 ];
 
 
-const best_performing = document.getElementById('best_performing');
+
 const stock_history = document.getElementById('stocks_history');
 
 
 
-async function loadSavingsData() {
+async function load_savings_data() {
     try {
         const savings_plan = document.getElementById('savings_plan');
         const response = await fetch('/expenses');
@@ -62,50 +62,55 @@ async function loadSavingsData() {
             
 };
 
-const labels = ['A', 'B', 'C', 'D', 'E']; // custom labels
-const values = [
-    Math.floor(Math.random() * 101),
-    Math.floor(Math.random() * 101),
-    Math.floor(Math.random() * 101),
-    Math.floor(Math.random() * 101),
-    Math.floor(Math.random() * 101)
-]; // random values 0–100
+async function load_stocks() {
+try {
+    const best_performing = document.getElementById('best_performing');
+    const response = await fetch('/stock_performance');
+    if (!response.ok) throw new Error('Did not get stocks_performances correctly');
+    
+    const stocks_array = await response.json();
 
-const best_stock_data = {
-    labels: labels,
-    datasets: [
-        {
-            label: 'stock 1',
-            data: values,
-            borderColor: 'rgba(13, 63, 19, 0.72)',
-            backgroundColor: 'rgba(142, 142, 142, 0.88)',
-        }
-    ]
-};
+    const stock_names = stocks_array.map(item => item.stock_name);
+    const stock_performance = stocks_array.map(item => item.value);
+    const backgroundColor = pastelColors.slice(0, stock_names.length);
 
+    const stock_datas = {
+    labels: stock_names,
+    datasets: [{
+        label: 'Stock Performance',
+        data: stock_performance,
+        backgroundColor: backgroundColor
+    }]
+    };
 
-const bar_config = {
+    const bar_config = {
     type: 'bar',
-    data: best_stock_data,
+    data: stock_datas,
     options: {
         indexAxis: 'y',
         elements: {
-            bar: {
+        bar: {
             borderWidth: 2,
-            }
+        }
         },
         responsive: true,
         plugins: {
-            legend: {
+        legend: {
             position: 'right',
-            },
-            title: {
-            display: true,
-            text: 'Stock Performance'
-            }
+        },
+        title: {
+            display: false
+        }
         }
     },
-};
+    };
+
+    new Chart(best_performing, bar_config);
+} catch (err) {
+    console.error('Failed to load stock_performances ', err);
+}
+}
+
 
 const stock_data_over_time = {
     labels: ['dec', 'jan', 'feb', 'mar', 'apr'],
@@ -146,7 +151,7 @@ const line_config = {
 };
 
 
-loadSavingsData();
-new Chart(best_performing, bar_config);
+load_savings_data();
+load_stocks();
 new Chart(stock_history, line_config);
 
