@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <h2 id="greeting"></h2>
+  <form id="incomeForm">
+    <label for="income">Income:</label>
+    <input type="number" id="income" name="income" required />
+    <button type="submit">Update Income</button>
+  </form>
+  <p id="incomeDisplay"></p>
+  <br/>
+  <form id="expenseForm">
+    <label for="expense">Add Expense:</label>
+    <input type="number" id="expense" name="expense" required />
+    <button type="submit">Add Expense</button>
+  </form>
+  <h3>Your Expenses</h3>
+  <table border="1">
+    <thead>
+      <tr>
+        <th>Expense</th>
+      </tr>
+    </thead>
+    <tbody id="expenses"></tbody>
+  </table>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const email = params.get('email');
+
+    async function loadDashboard() {
+      const res = await fetch(`/dashboard?email=${encodeURIComponent(email)}`);
+      const data = await res.json();
+      document.getElementById('greeting').textContent = `Hello, ${data.username}!`;
+      document.getElementById('income').value = data.income || '';
+      document.getElementById('incomeDisplay').textContent = `Current Income: ${data.income ?? 'Not set'}`;
+      renderExpenses(data.expenses);
+    }
+
+    function renderExpenses(expenses) {
+      const tbody = document.getElementById('expenses');
+      tbody.innerHTML = '';
+      expenses.forEach(exp => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${exp.expense}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    document.getElementById('incomeForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const income = document.getElementById('income').value;
+      await fetch('/update-income', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, income }),
+      });
+      loadDashboard();
+    });
+
+    document.getElementById('expenseForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const expense = document.getElementById('expense').value;
+      await fetch('/add-expense', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, expense }),
+      });
+      loadDashboard();
+      e.target.reset();
+    });
+
+    loadDashboard();
+  </script>
+</html>

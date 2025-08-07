@@ -14,4 +14,8 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
 
   const data = await res.json();
   document.getElementById("status").textContent = data.message;
+
+  if (res.status === 200) {
+    window.location.href = `dashboard.html?email=${encodeURIComponent(email)}`;
+  }
 });

@@ -77,7 +77,60 @@ app.post("/login", async (req, res) => {
   }
 });
 
+app.get('/dashboard', async (req, res) => {
+  const { email } = req.query;
+  try {
+    const userRes = await pool.query('SELECT username FROM Accounts WHERE email = $1', [email]);
+    if (userRes.rows.length === 0) return res.status(404).json({ message: 'User not found' });
 
+    const financeRes = await pool.query('SELECT income, expenses FROM FinanceEntries WHERE email = $1', [email]);
+    const income = financeRes.rows.length > 0 ? financeRes.rows[0].income : null;
+    const expenses = financeRes.rows.length > 0 && financeRes.rows[0].expenses ? financeRes.rows[0].expenses : [];
+    res.json({
+      username: userRes.rows[0].username,
+      income,
+      expenses: expenses.map(expense => ({ expense }))
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.post('/update-income', async (req, res) => {
+  const { email, income } = req.body;
+  try {
+    const checkRes = await pool.query('SELECT id FROM FinanceEntries WHERE email = $1', [email]);
+    if (checkRes.rows.length > 0) {
+      await pool.query('UPDATE FinanceEntries SET income = $1 WHERE email = $2', [income, email]);
+    } else {
+      await pool.query('INSERT INTO FinanceEntries (email, income, expenses) VALUES ($1, $2, $3)', [email, income, []]);
+    }
+    res.json({ message: 'Income updated' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.post('/add-expense', async (req, res) => {
+  const { email, expense } = req.body;
+  try {
+    const checkRes = await pool.query('SELECT expenses FROM FinanceEntries WHERE email = $1', [email]);
+    if (checkRes.rows.length > 0) {
+      await pool.query(
+        'UPDATE FinanceEntries SET expenses = array_append(expenses, $1) WHERE email = $2',
+        [expense, email]
+      );
+    } else {
+      await pool.query(
+        'INSERT INTO FinanceEntries (email, income, expenses) VALUES ($1, $2, $3)',
+        [email, null, [expense]]
+      );
+    }
+    res.json({ message: 'Expense updated' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 app.listen(port, hostname, () => {
   console.log(`Server running at http://${hostname}:${port}`);
 });
