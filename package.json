@@ -4,14 +4,17 @@
   "main": "budget.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "cd app && node server.js"
-    "setup": "psql -U your_username -d LoginData -f setup.sql"
+    "start": "cd app && node server.js",
+    "setup": "psql -U your_username -d logindata -f setup.sql"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "express": "^5.1.0"
+    "body-parser": "^1.20.2",
+    "express": "^5.1.0",
+    "pg": "^8.11.0",
+    "bcrypt": "^5.1.0"
   }
 }

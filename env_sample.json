@@ -1,7 +1,10 @@
 {
-	"user": "USER",
-	"host": "localhost",
-	"database": "LoginData",
-	"password": "PASSWORD",
+	"AWS_User": "commoncentsdb",
+	"Local_User": "YOURPOSTGRESUSER",
+	"Local_Password": "YOURPOSTGRESPASSWORD",
+	"Local_Host": "localhost",
+	"RDS_Endpoint": "commoncentsdb.ccx4i6kqahfn.us-east-1.rds.amazonaws.com",
+	"database": "logindata",
+	"AWS_Password": "PASSWORD",
 	"port": 5432
 }
