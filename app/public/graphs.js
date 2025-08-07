@@ -11,7 +11,6 @@ const pastelColors = [
 
 
 
-const stock_history = document.getElementById('stocks_history');
 
 
 
@@ -112,46 +111,53 @@ try {
 }
 
 
-const stock_data_over_time = {
-    labels: ['dec', 'jan', 'feb', 'mar', 'apr'],
-    datasets: [
-        {
-            label: 'apple',
-            data: [12, 45, 67, 30, 80],
-            borderColor: 'rgba(75, 192, 192, 1)',
-            backgroundColor: 'rgba(75, 192, 192, 0.2)',
-            fill: false
-        },
-        {
-            label: 'microsoft',
-            data: [20, 60, 40, 90, 50],
-            borderColor: 'rgba(255, 99, 132, 1)',
-            backgroundColor: 'rgba(255, 99, 132, 0.2)',
-            fill: false
-        }
-    ]
-};
+async function load_stock_history() {
+try {
+    const stock_history_chart = document.getElementById('stocks_history');
+    const response = await fetch('/stock_history');
+    if (!response.ok) throw new Error('Did not get stock history correctly');
 
+    const stocks_array = await response.json();
 
-const line_config = {
+    if (!stocks_array || stocks_array.length === 0) {
+    throw new Error('Stock history data is empty');
+    }
+
+    if (!stocks_array[0].data) {
+    throw new Error('data is missing from first stock');
+    }
+
+    const labels = Object.keys(stocks_array[0].data);
+
+    const datasets = stocks_array.map((item, index) => ({
+    label: item.stock_name,
+    data: Object.values(item.data),
+    borderColor: pastelColors[index % pastelColors.length],
+    fill: false
+    }));
+
+    const line_config = {
     type: 'line',
-    data: stock_data_over_time,
+    data: { labels, datasets },
     options: {
-    responsive: true,
-    plugins: {
-        legend: {
-        position: 'top',
-        },
-        title: {
-        display: true,
-        text: 'Stock history over time'
+        responsive: true,
+        plugins: {
+        legend: { position: 'top' },
+        title: { display: true, text: 'Stock history over time' }
         }
     }
-    },
-};
+    };
+
+    new Chart(stock_history_chart, line_config);
+} catch (err) {
+    console.error('Failed to load stock history ', err);
+}
+}
+
 
 
 load_savings_data();
 load_stocks();
-new Chart(stock_history, line_config);
+load_stock_history();
+
 

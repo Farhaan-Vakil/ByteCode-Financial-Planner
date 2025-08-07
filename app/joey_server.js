@@ -16,7 +16,8 @@ pool.connect().then(() => {
 app.use(express.static("public"));
 app.use(express.json());
 
-
+//THIS ONE IS 
+// EX { category: "Food", amount: 250}
 app.get("/expenses", async (req, res) => {
   try {
     const result = await pool.query("SELECT category, amount FROM savings");
@@ -55,8 +56,10 @@ app.post("/expenses", async (req, res) => {
 });
 
 //Quite literally the exact same code as the other one 
+//EX: { stock_name: "apple", value: 123.45}
 app.post("/stock_performance", async (req, res) => {
   try {
+    //LOOP FOR ARRAY SO YOU CAN PUT MULTIPLE THINGS AT ONCE OR MANY
     const stocksArray = req.body;
     if (!Array.isArray(stocksArray) || stocksArray.length === 0) {
       return res.status(400).send("Input should be array of {stock_name, value}");
@@ -92,8 +95,49 @@ app.get("/stock_performance", async (req, res) => {
 });
 
 
+//STOCK HISTORY IS A KEYVALUE PAIR CALLED DATA (DATE, VALUE)
+
+//{
+//  stock_name: "apple",
+//  stock_data: { dec: 12, jan: 45, feb: 67 }
+//}
+//EX
+app.post("/stock_history", async (req, res) => {
+  try {
+    const stocks_array = req.body;
+    if (!Array.isArray(stocks_array) || stocks_array.length === 0) {
+      return res.status(400).send("Input should be array of {stock_name, data}");
+    }
+
+    const values = [];
+    const placeholders = stocks_array.map((item, i) => {
+      if (!item.stock_name || typeof item.data !== "object") {
+        throw new Error("This item is invalid :(");
+      }
+      values.push(item.stock_name, JSON.stringify(item.data));
+      return `($${i * 2 + 1}, $${i * 2 + 2}::jsonb)`;
+    }).join(",");
+
+    const query = `INSERT INTO stock_history (stock_name, data) VALUES ${placeholders}`;
+    await pool.query(query, values);
+
+    res.status(201).send("Stock history inserted successfully :)");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Database query failed");
+  }
+});
+
+app.get("/stock_history", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM stock_history");
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Database query failed");
+  }
+});
 
 app.listen(port, hostname, () => {
   console.log(`Server running at http://${hostname}:${port}/`);
 });
-
