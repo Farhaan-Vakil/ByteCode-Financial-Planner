@@ -9,7 +9,9 @@
   <p id="incomeDisplay"></p>
   <br/>
   <form id="expenseForm">
-    <label for="expense">Add Expense:</label>
+    <label for="exepenseName">Expense Name:</label>
+    <input type="text" id="exepenseName" name="exepenseName" required/>
+    <label for="expense">Expense Amount:</label>
     <input type="number" id="expense" name="expense" required />
     <button type="submit">Add Expense</button>
   </form>
@@ -39,8 +41,10 @@
       const tbody = document.getElementById('expenses');
       tbody.innerHTML = '';
       expenses.forEach(exp => {
+        const name = exp.name || exp.expenseName || '';
+        const amount = exp.amount || exp.expense || '';
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${exp.expense}</td>`;
+        tr.innerHTML = `<td>${name}: $${amount}</td>`;
         tbody.appendChild(tr);
       });
     }
@@ -48,21 +52,24 @@
     document.getElementById('incomeForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const income = document.getElementById('income').value;
+      const budgetIndex = 0;
       await fetch('/update-income', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, income }),
+        body: JSON.stringify({ email, income, budgetIndex }),
       });
       loadDashboard();
     });
 
     document.getElementById('expenseForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      const expenseName = document.getElementById('exepenseName').value;
       const expense = document.getElementById('expense').value;
+      const budgetIndex = 0;
       await fetch('/add-expense', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, expense }),
+        body: JSON.stringify({ email, expenseName, expense, budgetIndex }),
       });
       loadDashboard();
       e.target.reset();

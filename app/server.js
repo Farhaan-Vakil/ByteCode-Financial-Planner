@@ -39,13 +39,13 @@ app.post('/signup', async (req, res) => {
   const { username, email, password } = req.body;
 
   try {
-    const checkUser = await pool.query('SELECT * FROM Accounts WHERE email = $1', [email]);
+    const checkUser = await pool.query('SELECT * FROM accounts WHERE email = $1', [email]);
     if (checkUser.rows.length > 0) {
       return res.status(400).json({ message: 'Email already exists' });
     }
     const hashed = await bcrypt.hash(password, 10);
 
-    await pool.query('INSERT INTO Accounts (username, email, password) VALUES ($1, $2, $3)', [username, email, hashed]);
+    await pool.query('INSERT INTO accounts (username, email, password) VALUES ($1, $2, $3)', [username, email, hashed]);
     res.json({ message: 'Account created successfully' });
   } catch (err) {
     console.error(err);
@@ -57,7 +57,7 @@ app.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
     const result = await pool.query(
-      "SELECT * FROM Accounts WHERE email = $1",
+      "SELECT * FROM accounts WHERE email = $1",
       [email]
     );
     if (result.rows.length > 0) {
@@ -80,52 +80,63 @@ app.post("/login", async (req, res) => {
 app.get('/dashboard', async (req, res) => {
   const { email } = req.query;
   try {
-    const userRes = await pool.query('SELECT username FROM Accounts WHERE email = $1', [email]);
-    if (userRes.rows.length === 0) return res.status(404).json({ message: 'User not found' });
+    const userRes = await pool.query(
+      'SELECT username, budgets FROM accounts WHERE email = $1',
+      [email]
+    );
+    if (userRes.rows.length === 0)
+      return res.status(404).json({ message: 'User not found' });
 
-    const financeRes = await pool.query('SELECT income, expenses FROM FinanceEntries WHERE email = $1', [email]);
-    const income = financeRes.rows.length > 0 ? financeRes.rows[0].income : null;
-    const expenses = financeRes.rows.length > 0 && financeRes.rows[0].expenses ? financeRes.rows[0].expenses : [];
+    const username = userRes.rows[0].username;
+    const budgets = userRes.rows[0].budgets || [];
+    const latestBudget =
+      budgets.length > 0
+        ? budgets[budgets.length - 1]
+        : { income: null, expenses: [] };
+    const income = latestBudget.income || null;
+    const expenses = latestBudget.expenses || [];
+
     res.json({
-      username: userRes.rows[0].username,
+      username,
       income,
-      expenses: expenses.map(expense => ({ expense }))
+      expenses
     });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 });
 
+
 app.post('/update-income', async (req, res) => {
-  const { email, income } = req.body;
+  const { email, income, budgetIndex } = req.body;
   try {
-    const checkRes = await pool.query('SELECT id FROM FinanceEntries WHERE email = $1', [email]);
-    if (checkRes.rows.length > 0) {
-      await pool.query('UPDATE FinanceEntries SET income = $1 WHERE email = $2', [income, email]);
+    const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
+    let budgets = userRes.rows.length > 0 && userRes.rows[0].budgets ? userRes.rows[0].budgets : [];
+    if (budgets.length === 0) {
+      budgets = [{ income: Number(income), expenses: {} }];
+    } else if (budgetIndex === undefined || budgetIndex < 0 || budgetIndex >= budgets.length) {
+      return res.status(400).json({ message: 'Invalid budget index' });
     } else {
-      await pool.query('INSERT INTO FinanceEntries (email, income, expenses) VALUES ($1, $2, $3)', [email, income, []]);
+      budgets[budgetIndex].income = Number(income);
     }
+    await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
     res.json({ message: 'Income updated' });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 });
-
 app.post('/add-expense', async (req, res) => {
-  const { email, expense } = req.body;
+  const { email, expenseName, expense, budgetIndex } = req.body;
   try {
-    const checkRes = await pool.query('SELECT expenses FROM FinanceEntries WHERE email = $1', [email]);
-    if (checkRes.rows.length > 0) {
-      await pool.query(
-        'UPDATE FinanceEntries SET expenses = array_append(expenses, $1) WHERE email = $2',
-        [expense, email]
-      );
-    } else {
-      await pool.query(
-        'INSERT INTO FinanceEntries (email, income, expenses) VALUES ($1, $2, $3)',
-        [email, null, [expense]]
-      );
+    const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
+    let budgets = userRes.rows.length > 0 && userRes.rows[0].budgets ? userRes.rows[0].budgets : [];
+    if (budgets.length === 0 || budgetIndex === undefined || budgetIndex < 0 || budgetIndex >= budgets.length) {
+      return res.status(400).json({ message: 'Invalid budget index' });
     }
+    budgets[budgetIndex].expenses = budgets[budgetIndex].expenses || [];
+    budgets[budgetIndex].expenses.push({ name: expenseName, amount: Number(expense) });
+    await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
     res.json({ message: 'Expense updated' });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
