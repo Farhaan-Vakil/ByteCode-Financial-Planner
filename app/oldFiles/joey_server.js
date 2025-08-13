@@ -5,7 +5,7 @@ const app = express();
 const port = 3000;
 const hostname = "localhost";
 
-const env = require("../env.json");
+const env = require("../../env.json");
 const Pool = pg.Pool;
 const pool = new Pool(env);
 

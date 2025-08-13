@@ -1,20 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+  <script src="index.js" defer></script>
+  <script src="graphs.js" defer></script>
+</head>
+<body>
   <h2 id="greeting"></h2>
+
   <form id="incomeForm">
     <label for="income">Income:</label>
     <input type="number" id="income" name="income" required />
     <button type="submit">Update Income</button>
   </form>
+
   <p id="incomeDisplay"></p>
   <br/>
+
   <form id="expenseForm">
-    <label for="exepenseName">Expense Name:</label>
-    <input type="text" id="exepenseName" name="exepenseName" required/>
+    <label for="expenseName">Expense Name:</label>
+    <input type="text" id="expenseName" name="expenseName" required/>
     <label for="expense">Expense Amount:</label>
     <input type="number" id="expense" name="expense" required />
     <button type="submit">Add Expense</button>
   </form>
+
   <h3>Your Expenses</h3>
   <table border="1">
     <thead>
@@ -24,57 +36,85 @@
     </thead>
     <tbody id="expenses"></tbody>
   </table>
+
+  <h3>Savings Plan</h3>
+  <canvas id="savings_plan" width="400" height="200"></canvas>
+
   <script>
-    const params = new URLSearchParams(window.location.search);
-    const email = params.get('email');
+    document.addEventListener("DOMContentLoaded", () => {
+      const params = new URLSearchParams(window.location.search);
+      const email = params.get('email');
 
-    async function loadDashboard() {
-      const res = await fetch(`/dashboard?email=${encodeURIComponent(email)}`);
-      const data = await res.json();
-      document.getElementById('greeting').textContent = `Hello, ${data.username}!`;
-      document.getElementById('income').value = data.income || '';
-      document.getElementById('incomeDisplay').textContent = `Current Income: ${data.income ?? 'Not set'}`;
-      renderExpenses(data.expenses);
-    }
+      async function loadDashboard() {
+        const res = await fetch(`/dashboard?email=${encodeURIComponent(email)}`);
+        const data = await res.json();
+        document.getElementById('greeting').textContent = `Hello, ${data.username}!`;
+        document.getElementById('income').value = data.income || '';
+        document.getElementById('incomeDisplay').textContent = `Current Income: ${data.income ?? 'Not set'}`;
+        renderExpenses(data.expenses);
 
-    function renderExpenses(expenses) {
-      const tbody = document.getElementById('expenses');
-      tbody.innerHTML = '';
-      expenses.forEach(exp => {
-        const name = exp.name || exp.expenseName || '';
-        const amount = exp.amount || exp.expense || '';
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${name}: $${amount}</td>`;
-        tbody.appendChild(tr);
+        if (document.getElementById('savings_plan')) {
+          renderSavingsChart(data.expenses, data.income);
+        }
+      }
+
+      function renderExpenses(expenses) {
+        const tbody = document.getElementById('expenses');
+        tbody.innerHTML = '';
+        expenses.forEach(exp => {
+          const name = exp.name || exp.expenseName || '';
+          const amount = exp.amount || exp.expense || '';
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${name}: $${amount}</td>`;
+          tbody.appendChild(tr);
+        });
+      }
+
+      function renderSavingsChart(expenses, income) {
+        const ctx = document.getElementById('savings_plan').getContext('2d');
+        const totalExpenses = expenses.reduce((sum, exp) => sum + Number(exp.amount || exp.expense || 0), 0);
+        const savings = income - totalExpenses;
+
+        new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Expenses', 'Savings'],
+            datasets: [{
+              data: [totalExpenses, savings],
+              backgroundColor: ['#ff6384', '#36a2eb']
+            }]
+          }
+        });
+      }
+
+      document.getElementById('incomeForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const income = document.getElementById('income').value;
+        const budgetIndex = 0;
+        await fetch('/update-income', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, income, budgetIndex }),
+        });
+        loadDashboard();
       });
-    }
 
-    document.getElementById('incomeForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const income = document.getElementById('income').value;
-      const budgetIndex = 0;
-      await fetch('/update-income', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, income, budgetIndex }),
+      document.getElementById('expenseForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const expenseName = document.getElementById('expenseName').value;
+        const expense = document.getElementById('expense').value;
+        const budgetIndex = 0;
+        await fetch('/add-expense', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, expenseName, expense, budgetIndex }),
+        });
+        loadDashboard();
+        e.target.reset();
       });
+
       loadDashboard();
     });
-
-    document.getElementById('expenseForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const expenseName = document.getElementById('exepenseName').value;
-      const expense = document.getElementById('expense').value;
-      const budgetIndex = 0;
-      await fetch('/add-expense', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, expenseName, expense, budgetIndex }),
-      });
-      loadDashboard();
-      e.target.reset();
-    });
-
-    loadDashboard();
   </script>
+</body>
 </html>

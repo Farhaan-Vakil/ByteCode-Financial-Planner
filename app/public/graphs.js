@@ -17,7 +17,8 @@ const pastelColors = [
 async function load_savings_data() {
     try {
         const savings_plan = document.getElementById('savings_plan');
-        const response = await fetch('/expenses');
+        const userEmail = document.getElementById("email").value.trim();
+        const response = await fetch(`/expenses?email=${encodeURIComponent(userEmail)}&budgetIndex=0`);
         if (!response.ok) throw new Error('Did not get expenses correctly');
         
         const savingsArray = await response.json();
