@@ -1,5 +1,3 @@
-const apiKey = "d290c7hr01qvka4rg1m0d290c7hr01qvka4rg1mg";
-
 const incomeInput = document.getElementById("income");
 const slider = document.getElementById("percentSlider");
 const investPercent = document.getElementById("investPercent");
@@ -107,8 +105,6 @@ async function searchStock() {
         tbody.innerHTML = `<tr><td colspan='5'>Stock not found or invalid symbol.</td></tr>`;
     }
 }
-
-
 //this will actually display the stocks
 function displayStockTable(stocks) {
     const tbody = document.querySelector("#stockTable tbody");

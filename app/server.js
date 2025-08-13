@@ -4,12 +4,14 @@ const path = require("path");
 const fs = require("fs");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
+let finnhub = require("finnhub");
+const env = JSON.parse(fs.readFileSync("../env.json", "utf-8"));
+const finnhubClient = new finnhub.DefaultApi(env.apiKey);
 
 const app = express();
 const hostname = "localhost";
 const port = 3000;
 
-const env = JSON.parse(fs.readFileSync("../env.json", "utf-8"));
 //use for AWS Database
 const pool = new Pool({
   user: env.AWS_User,
@@ -54,8 +56,6 @@ app.get("/expenses", async (req, res) => {
     res.status(500).send("Failed to get expenses");
   }
 });
-
-
 
 app.post('/signup', async (req, res) => {
   const { username, email, password } = req.body;
@@ -116,11 +116,14 @@ app.get('/dashboard', async (req, res) => {
         : { income: null, expenses: [] };
     const income = latestBudget.income || null;
     const expenses = latestBudget.expenses || [];
+    const stocks = latestBudget.stocks || [];
 
     res.json({
       username,
       income,
-      expenses
+      expenses,
+      stocks,
+      apiKey: env.apiKey
     });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -163,6 +166,51 @@ app.post('/add-expense', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+app.post('/add-stock', async (req, res) => {
+  const { email, StockSymbol, shares, budgetIndex } = req.body;
+  try {
+    const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
+    let budgets = userRes.rows.length > 0 && userRes.rows[0].budgets ? userRes.rows[0].budgets : [];
+    if (budgets.length === 0 || budgetIndex === undefined || budgetIndex < 0 || budgetIndex >= budgets.length) {
+      return res.status(400).json({ message: 'Invalid budget index' });
+    }
+    budgets[budgetIndex].stocks = budgets[budgetIndex].stocks || [];
+    budgets[budgetIndex].stocks.push({ name: StockSymbol, amount: Number(shares) });
+    await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
+    res.json({ message: 'Expense updated' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.get(`/news`, (req, res) => {
+    finnhubClient.marketNews("general", {}, (error, data, response) => {
+        if (error) {
+            console.log(error);
+            res.status(500).json({error: "Failed to fecth news"});
+
+        }
+        res.status(200).json(data);
+        console.log(data);
+    });
+})
+
+app.get(`/stockNews`, (req,res) => {
+    let stockSymbol = req.query.stockSymbol;
+    console.log(stockSymbol);
+    finnhubClient.companyNews(stockSymbol, "2025-07-01", "2025-08-01", (error,data,response) => {
+        
+        if (error) {
+            console.log(error);
+            res.status(500).json({error: "failed to fetch stock news"});
+        }
+        res.status(200).json(data);
+        console.log(data);
+
+
+    });
+})
+
 //Quite literally the exact same code as the other one 
 //EX: { stock_name: "apple", value: 123.45}
 app.post("/stock_performance", async (req, res) => {

@@ -6,6 +6,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
   <script src="index.js" defer></script>
   <script src="graphs.js" defer></script>
+  <script src="stock.js" defer></script>
 </head>
 <body>
   <h2 id="greeting"></h2>
@@ -27,6 +28,15 @@
     <button type="submit">Add Expense</button>
   </form>
 
+  <form id = "stockForm">
+    <label for="StockSymbol">Stock Symbol:</label>
+    <input type="text" id="StockSymbol" name="StockSymbol" required/>
+    <label for="shares">Shares:</label>
+    <input type="number" id="shares" name="shares" required />
+    <button type="submit">Add Stock</button>
+  </form>
+  </form>
+
   <h3>Your Expenses</h3>
   <table border="1">
     <thead>
@@ -37,10 +47,24 @@
     <tbody id="expenses"></tbody>
   </table>
 
+<h3>Your Stocks</h3>
+<table border="1">
+  <thead>
+    <tr>
+      <th>Symbol</th>
+      <th>Shares</th>
+      <th>Price</th>
+      <th>Total Value</th>
+    </tr>
+  </thead>
+  <tbody id="stocks"></tbody>
+</table>
+
   <h3>Savings Plan</h3>
   <canvas id="savings_plan" width="400" height="200"></canvas>
 
   <script>
+    let apiKey = '';
     document.addEventListener("DOMContentLoaded", () => {
       const params = new URLSearchParams(window.location.search);
       const email = params.get('email');
@@ -48,6 +72,7 @@
       async function loadDashboard() {
         const res = await fetch(`/dashboard?email=${encodeURIComponent(email)}`);
         const data = await res.json();
+        apiKey = data.apiKey;
         document.getElementById('greeting').textContent = `Hello, ${data.username}!`;
         document.getElementById('income').value = data.income || '';
         document.getElementById('incomeDisplay').textContent = `Current Income: ${data.income ?? 'Not set'}`;
@@ -56,8 +81,37 @@
         if (document.getElementById('savings_plan')) {
           renderSavingsChart(data.expenses, data.income);
         }
+        
+        if (data.stocks && data.stocks.length > 0) {
+          await renderStocks(data.stocks);
+        } else {
+          document.getElementById('stocks').innerHTML = "<tr><td colspan='4'>No stocks added</td></tr>";
+        }
       }
+      async function renderStocks(stocks) {
+        const tbody = document.getElementById('stocks');
+        tbody.innerHTML = '';
 
+        for (const stock of stocks) {
+          try {
+            const priceRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${stock.name}&token=${apiKey}`);
+            const priceData = await priceRes.json();
+            const price = priceData.c || 0;
+            const totalValue = (price * stock.amount).toFixed(2);
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td><a href="stockNews.html?stockSymbol=${stock.name}">${stock.name}</a></td>
+              <td>${stock.amount}</td>
+              <td>$${price.toFixed(2)}</td>
+              <td>$${totalValue}</td>
+            `;
+            tbody.appendChild(tr);
+          } catch (err) {
+            console.error(`Error fetching price for ${stock.name}`, err);
+          }
+        }
+      }
       function renderExpenses(expenses) {
         const tbody = document.getElementById('expenses');
         tbody.innerHTML = '';
@@ -113,6 +167,19 @@
         e.target.reset();
       });
 
+      document.getElementById('stockForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const StockSymbol = document.getElementById('StockSymbol').value;
+        const shares = document.getElementById('shares').value;
+        const budgetIndex = 0;
+        await fetch('/add-stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, StockSymbol, shares, budgetIndex }),
+        });
+        loadDashboard();
+        e.target.reset();
+      });
       loadDashboard();
     });
   </script>

@@ -5,7 +5,7 @@ CREATE DATABASE commoncentsdb;
 {
   "income":  1500,
   "expenses": {"rent": 1500, "food": 1200},
-  "stocks": {"apple": 1500}
+  "stocks": {"apple": 2}	
 }*/
 CREATE TABLE accounts (
 	id SERIAL PRIMARY KEY NOT NULL,
