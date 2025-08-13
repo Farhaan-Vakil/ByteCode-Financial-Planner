@@ -11,9 +11,6 @@ const pastelColors = [
 
 
 
-
-
-
 async function load_savings_data() {
     try {
         const savings_plan = document.getElementById('savings_plan');
@@ -70,8 +67,14 @@ try {
     const stocks_array = await response.json();
 
     const stock_names = stocks_array.map(item => item.stock_name);
-    const stock_performance = stocks_array.map(item => item.value);
-    const backgroundColor = pastelColors.slice(0, stock_names.length);
+    const stock_performance = stocks_array.map(item => Number(item.value));
+
+
+    const maxIndex = stock_performance.indexOf(Math.max(...stock_performance));
+
+    const backgroundColor = stock_performance.map((_, index) =>
+        index === maxIndex ? 'green' : 'grey'
+    );
 
     const stock_datas = {
     labels: stock_names,
