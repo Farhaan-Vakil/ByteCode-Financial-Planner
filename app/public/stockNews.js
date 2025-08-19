@@ -4,15 +4,18 @@
   let urlParams = new URLSearchParams(queryString);
   let stockSymbol = urlParams.get('stockSymbol');
 
-  document.getElementById("stock-title").textContent = "News for " + stockSymbol;
+  function getDateNMonthAgo(n) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - n); 
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+ }
 
-  document.getElementById("newsForm").addEventListener("submit", function(e) {
-        e.preventDefault(); // Stop form from reloading page
 
-        const sdate = document.getElementById("sdate").value;
-        const edate = document.getElementById("edate").value;
-
-        fetch(`/stockNews?stockSymbol=${stockSymbol}&sdate=${sdate}&edate=${edate}`).then((response) => {
+  function getStockNews(stockSymbol, sdate) {
+    fetch(`/stockNews?stockSymbol=${stockSymbol}&sdate=${getDateNMonthAgo(sdate)}&edate=${getDateNMonthAgo(0)}`).then((response) => {
                 response.json().then((body) => {
         for (i = 0; i < body.length; i ++) {
             let article = document.createElement("article");
@@ -36,7 +39,27 @@
             article.appendChild(sum);
 
             articles.appendChild(article);
-        }})});
+        }})})
+    
+  }     
 
+  
+
+  
+  console.log(stockSymbol);
+
+
+
+  
+
+  document.getElementById("stock-title").textContent = "News for " + stockSymbol;
+
+  document.addEventListener("DOMContentLoaded", getStockNews(stockSymbol, 1)); 
+
+  document.getElementById("newsForm").addEventListener("submit", function(e) {
+        e.preventDefault(); // Stop form from reloading page
+
+        const sdate = document.getElementById("sdate").value;
+        getStockNews(stockSymbol, sdate);
     
     });
