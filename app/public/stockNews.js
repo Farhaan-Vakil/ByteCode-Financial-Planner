@@ -1,12 +1,18 @@
   let articles = document.getElementById("stock");
-  
+
+  let queryString = window.location.search;
+  let urlParams = new URLSearchParams(queryString);
+  let stockSymbol = urlParams.get('stockSymbol');
+
+  document.getElementById("stock-title").textContent = "News for " + stockSymbol;
+
   document.getElementById("newsForm").addEventListener("submit", function(e) {
         e.preventDefault(); // Stop form from reloading page
 
         const sdate = document.getElementById("sdate").value;
         const edate = document.getElementById("edate").value;
 
-        fetch(`/stockNews?stock=${"AAPL"}&sdate=${sdate}&edate=${edate}`).then((response) => {
+        fetch(`/stockNews?stockSymbol=${stockSymbol}&sdate=${sdate}&edate=${edate}`).then((response) => {
                 response.json().then((body) => {
         for (i = 0; i < body.length; i ++) {
             let article = document.createElement("article");
