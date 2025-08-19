@@ -163,12 +163,17 @@ app.post('/add-expense', async (req, res) => {
 
     const idx = (budgetIndex !== undefined && budgetIndex >= 0 && budgetIndex < budgets.length) ? budgetIndex : 0;
     if (!Array.isArray(budgets[idx].expenses)) budgets[idx].expenses = [];
-    if (!Array.isArray(budgets[idx].stocks)) budgets[idx].stocks = [];
-    budgets[idx].expenses = budgets[idx].expenses || [];
-    budgets[idx].expenses.push({ name: expenseName, amount: Number(expense) });
+
+    const existingExpense = budgets[idx].expenses.find(e => e.name.toLowerCase() === expenseName.toLowerCase());
+
+    if (existingExpense) {
+      existingExpense.amount = Number(expense);
+    } else {
+      budgets[idx].expenses.push({ name: expenseName, amount: Number(expense) });
+    }
 
     await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
-    res.json({ message: 'Expense added' });
+    res.json({ message: 'Expense added/updated successfully' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -176,20 +181,90 @@ app.post('/add-expense', async (req, res) => {
 });
 app.post('/add-stock', async (req, res) => {
   const { email, StockSymbol, shares, budgetIndex } = req.body;
+
+  if (!StockSymbol || !shares) {
+    return res.status(400).json({ message: 'Stock symbol and amount are required' });
+  }
+  const symbol = StockSymbol.toUpperCase();
+
   try {
+    const stockQuote = await new Promise((resolve, reject) => {
+      finnhubClient.quote(symbol, (err, data, response) => {
+        if (err) return reject(err);
+        resolve(data);
+      });
+    });
+
+    if (!stockQuote || typeof stockQuote.c !== "number" || stockQuote.c === 0) {
+      return res.status(400).json({ message: `Stock symbol "${symbol}" not found` });
+    }
+
     const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
     let budgets = userRes.rows.length > 0 && userRes.rows[0].budgets ? userRes.rows[0].budgets : [];
-
     if (budgets.length === 0) {
       budgets = [{ income: 0, expenses: [], stocks: [] }];
     }
 
     const idx = (budgetIndex !== undefined && budgetIndex >= 0 && budgetIndex < budgets.length) ? budgetIndex : 0;
-    budgets[idx].stocks = budgets[idx].stocks || [];
-    budgets[idx].stocks.push({ name: StockSymbol, amount: Number(shares) });
+    if (!Array.isArray(budgets[idx].stocks)) budgets[idx].stocks = [];
+    const existingStock = budgets[idx].stocks.find(s => s.symbol === symbol);
+    if (existingStock) {
+      existingStock.amount = Number(shares);
+    } else {
+      budgets[idx].stocks.push({ symbol, amount: Number(shares) });
+    }
 
     await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
-    res.json({ message: 'Stock added' });
+    res.json({ message: 'Stock added/updated successfully' });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error adding stock' });
+  }
+});
+
+
+app.post('/delete-stock', async (req, res) => {
+  const { email, symbol, budgetIndex } = req.body;
+  if (!email) return res.status(400).json({ message: 'Email is required' });
+  if (!symbol) return res.status(400).json({ message: 'Stock symbol is required' });
+
+  try {
+    const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
+    let budgets = userRes.rows.length > 0 && userRes.rows[0].budgets ? userRes.rows[0].budgets : [];
+    const idx = budgetIndex !== undefined ? budgetIndex : 0;
+
+    if (!Array.isArray(budgets[idx].stocks)) budgets[idx].stocks = [];
+
+    budgets[idx].stocks = budgets[idx].stocks.filter(
+      s => (s.symbol || s.name).toLowerCase() !== symbol.toLowerCase()
+    );
+
+    await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
+    res.json({ message: `Stock ${symbol} deleted successfully` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.post('/delete-expense', async (req, res) => {
+  const { email, name, budgetIndex } = req.body;
+  if (!email) return res.status(400).json({ message: 'Email is required' });
+  if (!name) return res.status(400).json({ message: 'Expense name is required' });
+
+  try {
+    const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
+    let budgets = userRes.rows.length > 0 && userRes.rows[0].budgets ? userRes.rows[0].budgets : [];
+    const idx = budgetIndex !== undefined ? budgetIndex : 0;
+
+    if (!Array.isArray(budgets[idx].expenses)) budgets[idx].expenses = [];
+    budgets[idx].expenses = budgets[idx].expenses.filter(
+      e => e.name.toLowerCase() !== name.toLowerCase()
+    );
+
+    await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
+    res.json({ message: `Expense '${name}' deleted successfully` });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
