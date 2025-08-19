@@ -3,6 +3,7 @@
   let queryString = window.location.search;
   let urlParams = new URLSearchParams(queryString);
   let stockSymbol = urlParams.get('stockSymbol');
+  let sdate = 1;
 
   function getDateNMonthAgo(n) {
         const d = new Date();
@@ -17,6 +18,8 @@
   function getStockNews(stockSymbol, sdate) {
     fetch(`/stockNews?stockSymbol=${stockSymbol}&sdate=${getDateNMonthAgo(sdate)}&edate=${getDateNMonthAgo(0)}`).then((response) => {
                 response.json().then((body) => {
+        articles.innerHTML = "";
+        
         for (i = 0; i < body.length; i ++) {
             let article = document.createElement("article");
             let headline = document.createElement("h2");
@@ -54,12 +57,13 @@
 
   document.getElementById("stock-title").textContent = "News for " + stockSymbol;
 
-  document.addEventListener("DOMContentLoaded", getStockNews(stockSymbol, 1)); 
+  document.addEventListener("DOMContentLoaded",  function () {
+  getStockNews(stockSymbol, sdate);
+});
 
   document.getElementById("newsForm").addEventListener("submit", function(e) {
-        e.preventDefault(); // Stop form from reloading page
+        e.preventDefault();
+        sdate = document.getElementById("sdate").value;
+        getStockNews(stockSymbol, sdate)
 
-        const sdate = document.getElementById("sdate").value;
-        getStockNews(stockSymbol, sdate);
-    
     });
