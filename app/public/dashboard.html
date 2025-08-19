@@ -17,6 +17,16 @@
   <p id="incomeDisplay"></p>
   <br/>
 
+  <!-- Investment controls -->
+  <div id="investControls" style="margin: 10px 0;">
+    <label for="percentSlider">Percentage to Invest:</label>
+    <input type="range" id="percentSlider" min="0" max="100" value="33" />
+    <span id="investPercent">33%</span>
+    <br />
+    <strong>Investment Amount:</strong>
+    $<span id="investAmount">0.00</span>
+  </div>
+
   <form id="expenseForm">
     <label for="expenseName">Expense Name:</label>
     <input type="text" id="expenseName" name="expenseName" required/>
@@ -36,9 +46,7 @@
   <h3>Your Expenses</h3>
   <table border="1">
     <thead>
-      <tr>
-        <th>Expense</th>
-      </tr>
+      <tr><th>Expense</th></tr>
     </thead>
     <tbody id="expenses"></tbody>
   </table>
@@ -46,12 +54,7 @@
   <h3>Your Stocks</h3>
   <table border="1">
     <thead>
-      <tr>
-        <th>Symbol</th>
-        <th>Shares</th>
-        <th>Price</th>
-        <th>Total Value</th>
-      </tr>
+      <tr><th>Symbol</th><th>Shares</th><th>Price</th><th>Total Value</th></tr>
     </thead>
     <tbody id="stocks"></tbody>
   </table>
@@ -81,6 +84,22 @@ let apiKey = '';
 const params = new URLSearchParams(window.location.search);
 const email = params.get('email');
 
+const incomeInput = document.getElementById("income");
+const slider = document.getElementById("percentSlider");
+const investPercent = document.getElementById("investPercent");
+const investAmount = document.getElementById("investAmount");
+
+slider.addEventListener("input", updateInvestmentAmount);
+incomeInput.addEventListener("input", updateInvestmentAmount);
+
+function updateInvestmentAmount() {
+  const income = parseFloat(incomeInput.value) || 0;
+  const percent = parseFloat(slider.value);
+  const investAmt = ((percent / 100) * income).toFixed(2);
+  investPercent.textContent = percent + "%";
+  investAmount.textContent = investAmt;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("deleteStockBtn").addEventListener("click", async () => {
@@ -100,7 +119,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const data = await res.json();
     alert(data.message);
-    location.reload();
+    loadDashboard();
   });
 
   document.getElementById("deleteExpenseBtn").addEventListener("click", async () => {
@@ -120,7 +139,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const data = await res.json();
     alert(data.message);
-    location.reload();
+    loadDashboard();
   });
 
   async function loadDashboard() {
@@ -131,6 +150,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('greeting').textContent = `Hello, ${data.username}!`;
     document.getElementById('income').value = data.income || '';
     document.getElementById('incomeDisplay').textContent = `Current Income: ${data.income ?? 'Not set'}`;
+    updateInvestmentAmount();
 
     renderExpenses(data.expenses || []);
     renderSavingsChart(data.expenses || [], data.income || 0);
@@ -201,15 +221,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const tbody = document.getElementById('stocks');
     tbody.innerHTML = '';
 
-    const validStocks = [];
-    
     for (const stock of stocks) {
-      const symbol = stock.symbol || stock.name;
+      const symbol = stock.symbol;
       if (!symbol || !stock.amount) continue;
 
       try {
         const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`);
         const data = await res.json();
+
         if (!data || typeof data.c !== "number" || data.c === 0) {
           alert(`Stock symbol "${symbol}" not found. It will not be added.`);
           continue;
@@ -226,7 +245,6 @@ document.addEventListener("DOMContentLoaded", () => {
           <td>$${totalValue}</td>
         `;
         tbody.appendChild(tr);
-        validStocks.push(stock);
 
       } catch (err) {
         console.error(`Error fetching price for ${symbol}`, err);
@@ -239,18 +257,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const tbody = document.getElementById('expenses');
     tbody.innerHTML = '';
     expenses.forEach(exp => {
-      const name = exp.name || exp.expenseName || '';
-      const amount = exp.amount || exp.expense || 0;
+      const name = exp.name || '';
+      const amount = exp.amount || 0;
       const tr = document.createElement('tr');
       tr.innerHTML = `<td>${name}: $${amount}</td>`;
       tbody.appendChild(tr);
     });
   }
+
   let savingsChart;
 
   function renderSavingsChart(expenses, income) {
     const ctx = document.getElementById('savings_plan').getContext('2d');
-    const totalExpenses = expenses.reduce((sum, exp) => sum + Number(exp.amount || exp.expense || 0), 0);
+    const totalExpenses = expenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
     const savings = income - totalExpenses;
 
     if (savingsChart) savingsChart.destroy();
@@ -259,10 +278,7 @@ document.addEventListener("DOMContentLoaded", () => {
       type: 'doughnut',
       data: {
         labels: ['Expenses', 'Savings'],
-        datasets: [{
-          data: [totalExpenses, savings],
-          backgroundColor: ['#ff6384', '#36a2eb']
-        }]
+        datasets: [{ data: [totalExpenses, savings], backgroundColor: ['#ff6384', '#36a2eb'] }]
       }
     });
   }
@@ -301,7 +317,6 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`);
       const data = await res.json();
-      
       if (!data || typeof data.c !== "number" || data.c === 0) {
         return alert(`Stock symbol "${symbol}" not found or has no price data`);
       }
@@ -319,7 +334,6 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("Error validating stock symbol");
     }
   });
-
 
   loadDashboard();
 });
