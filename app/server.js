@@ -6,7 +6,16 @@ const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
 let finnhub = require("finnhub");
 const env = JSON.parse(fs.readFileSync("../env.json", "utf-8"));
-const finnhubClient = new finnhub.DefaultApi(env.apiKey);
+
+
+// configure API key
+const api_key = finnhub.ApiClient.instance.authentications["api_key"];
+api_key.apiKey = env.apiKey;
+
+// create client
+const finnhubClient = new finnhub.DefaultApi();
+
+
 
 const app = express();
 const hostname = "localhost";
@@ -285,8 +294,10 @@ app.get(`/news`, (req, res) => {
 
 app.get(`/stockNews`, (req,res) => {
     let stockSymbol = req.query.stockSymbol;
+    let sdate = req.query.sdate;
+    let edate = req.query.edate;
     console.log(stockSymbol);
-    finnhubClient.companyNews(stockSymbol, "2025-07-01", "2025-08-01", (error,data,response) => {
+    finnhubClient.companyNews(stockSymbol, sdate, edate, (error,data,response) => {
         
         if (error) {
             console.log(error);

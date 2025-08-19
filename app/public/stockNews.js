@@ -1,13 +1,25 @@
   let articles = document.getElementById("stock");
-  
-  document.getElementById("newsForm").addEventListener("submit", function(e) {
-        e.preventDefault(); // Stop form from reloading page
 
-        const sdate = document.getElementById("sdate").value;
-        const edate = document.getElementById("edate").value;
+  let queryString = window.location.search;
+  let urlParams = new URLSearchParams(queryString);
+  let stockSymbol = urlParams.get('stockSymbol');
+  let sdate = 1;
 
-        fetch(`/stockNews?stock=${"AAPL"}&sdate=${sdate}&edate=${edate}`).then((response) => {
+  function getDateNMonthAgo(n) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - n); 
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+ }
+
+
+  function getStockNews(stockSymbol, sdate) {
+    fetch(`/stockNews?stockSymbol=${stockSymbol}&sdate=${getDateNMonthAgo(sdate)}&edate=${getDateNMonthAgo(0)}`).then((response) => {
                 response.json().then((body) => {
+        articles.innerHTML = "";
+        
         for (i = 0; i < body.length; i ++) {
             let article = document.createElement("article");
             let headline = document.createElement("h2");
@@ -30,7 +42,28 @@
             article.appendChild(sum);
 
             articles.appendChild(article);
-        }})});
-
+        }})})
     
+  }     
+
+  
+
+  
+  console.log(stockSymbol);
+
+
+
+  
+
+  document.getElementById("stock-title").textContent = "News for " + stockSymbol;
+
+  document.addEventListener("DOMContentLoaded",  function () {
+  getStockNews(stockSymbol, sdate);
+});
+
+  document.getElementById("newsForm").addEventListener("submit", function(e) {
+        e.preventDefault();
+        sdate = document.getElementById("sdate").value;
+        getStockNews(stockSymbol, sdate)
+
     });
