@@ -24,8 +24,10 @@ app.get(`/news`, (req, res) => {
 
 app.get(`/stockNews`, (req,res) => {
     let stock = req.query.stock;
+    let sdate = req.query.sdate;
+    let edate = req.query.edate;
     console.log(stock);
-    finnhubClient.companyNews(stock, "2025-07-01", "2025-08-01", (error,data,response) => {
+    finnhubClient.companyNews(stock, sdate, edate, (error,data,response) => {
         
         if (error) {
             console.log(error);
