@@ -3,7 +3,7 @@ let app = express();
 let hostname = "localhost";
 let port = 3000;
 let finnhub = require("finnhub");
-let env = require("../env.json");
+let env = require("../../env.json");
 
 const finnhubClient = new finnhub.DefaultApi(env.finnkey);
 
