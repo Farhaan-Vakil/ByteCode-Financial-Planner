@@ -15,9 +15,7 @@
   </form>
 
   <p id="incomeDisplay"></p>
-  <br/>
 
-  <!-- Investment controls -->
   <div id="investControls" style="margin: 10px 0;">
     <label for="percentSlider">Percentage to Invest:</label>
     <input type="range" id="percentSlider" min="0" max="100" value="33" />
@@ -45,19 +43,16 @@
 
   <h3>Your Expenses</h3>
   <table border="1">
-    <thead>
-      <tr><th>Expense</th></tr>
-    </thead>
+    <thead><tr><th>Expense</th></tr></thead>
     <tbody id="expenses"></tbody>
   </table>
 
   <h3>Your Stocks</h3>
   <table border="1">
-    <thead>
-      <tr><th>Symbol</th><th>Shares</th><th>Price</th><th>Total Value</th></tr>
-    </thead>
+    <thead><tr><th>Symbol</th><th>Shares</th><th>Price</th><th>Total Value</th></tr></thead>
     <tbody id="stocks"></tbody>
   </table>
+
 
   <h3>Delete Stock</h3>
   <input type="text" id="deleteStockSymbol" placeholder="Enter stock symbol (e.g. AAPL)">
@@ -69,17 +64,10 @@
 
   <h3>Savings Plan</h3>
   <canvas id="savings_plan" width="400" height="200"></canvas>
-
-  <h3>Stock perforamnce</h3>
+    <h3>Stock Perfroamnce</h3>
   <canvas id="stock_performance" width="400" height="200"></canvas>
 
 <script>
-      const pastelColors = [
-        '#ff9aa2','#ffb7b2','#ffdac1','#e2f0cb',
-        '#b5ead7','#c7ceea','#a2d2ff','#bde0fe',
-        '#caffbf','#ffd6a5'
-      ];
-
 let apiKey = '';
 const params = new URLSearchParams(window.location.search);
 const email = params.get('email');
@@ -89,16 +77,45 @@ const slider = document.getElementById("percentSlider");
 const investPercent = document.getElementById("investPercent");
 const investAmount = document.getElementById("investAmount");
 
-slider.addEventListener("input", updateInvestmentAmount);
-incomeInput.addEventListener("input", updateInvestmentAmount);
+let currentExpenses = [];
+let savingsChart;
 
 function updateInvestmentAmount() {
   const income = parseFloat(incomeInput.value) || 0;
+  const totalExpenses = currentExpenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
+  const netIncome = income - totalExpenses;
   const percent = parseFloat(slider.value);
-  const investAmt = ((percent / 100) * income).toFixed(2);
+  const investAmt = ((percent / 100) * netIncome).toFixed(2);
+
   investPercent.textContent = percent + "%";
   investAmount.textContent = investAmt;
+
+  renderSavingsChart();
 }
+
+function renderSavingsChart() {
+  const ctx = document.getElementById('savings_plan').getContext('2d');
+  const income = parseFloat(incomeInput.value) || 0;
+  const totalExpenses = currentExpenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
+  const investAmt = parseFloat(investAmount.textContent) || 0;
+  const savings = income - totalExpenses - investAmt;
+
+  if (savingsChart) savingsChart.destroy();
+
+  savingsChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Expenses', 'Investments', 'Savings'],
+      datasets: [{
+        data: [totalExpenses, investAmt, savings],
+        backgroundColor: ['#ff6384', '#85BB65', '#36a2eb']
+      }]
+    }
+  });
+}
+
+slider.addEventListener("input", updateInvestmentAmount);
+incomeInput.addEventListener("input", updateInvestmentAmount);
 
 document.addEventListener("DOMContentLoaded", () => {
 
@@ -112,13 +129,8 @@ document.addEventListener("DOMContentLoaded", () => {
       body: JSON.stringify({ email, symbol })
     });
 
-    if (!res.ok) {
-      const error = await res.text();
-      return alert(`Error: ${error}`);
-    }
-
-    const data = await res.json();
-    alert(data.message);
+    if (!res.ok) return alert(`Error: ${await res.text()}`);
+    alert((await res.json()).message);
     loadDashboard();
   });
 
@@ -132,17 +144,13 @@ document.addEventListener("DOMContentLoaded", () => {
       body: JSON.stringify({ email, name })
     });
 
-    if (!res.ok) {
-      const error = await res.text();
-      return alert(`Error: ${error}`);
-    }
-
-    const data = await res.json();
-    alert(data.message);
+    if (!res.ok) return alert(`Error: ${await res.text()}`);
+    alert((await res.json()).message);
     loadDashboard();
   });
 
-  async function loadDashboard() {
+
+async function loadDashboard() {
     const res = await fetch(`/dashboard?email=${encodeURIComponent(email)}`);
     const data = await res.json();
     apiKey = data.apiKey;
@@ -150,64 +158,47 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('greeting').textContent = `Hello, ${data.username}!`;
     document.getElementById('income').value = data.income || '';
     document.getElementById('incomeDisplay').textContent = `Current Income: ${data.income ?? 'Not set'}`;
-    updateInvestmentAmount();
 
-    renderExpenses(data.expenses || []);
-    renderSavingsChart(data.expenses || [], data.income || 0);
+    currentExpenses = data.expenses || [];
+    renderExpenses(currentExpenses);
+    updateInvestmentAmount();
 
     if (data.stocks && data.stocks.length > 0) {
       await renderStocks(data.stocks);
+      await load_stocks(data.stocks, apiKey);
     } else {
       document.getElementById('stocks').innerHTML = "<tr><td colspan='4'>No stocks added</td></tr>";
     }
   }
 
-
-      async function load_stocks() {
+  async function load_stocks(stocks_array, apiKeyParam) {
   try {
-    const ctx = document.getElementById('stock_performance').getContext('2d');
-    const stocks_array = await fetch(`/stock_performance?email=${encodeURIComponent(email)}&budgetIndex=0`).then(res => res.json());
+    if (!stocks_array || !stocks_array.length) return;
 
-    if (!stocks_array.length) return;
+    const ctx = document.getElementById('stock_performance').getContext('2d');
 
     const stock_names = [];
     const stock_values = [];
     let maxValue = 0;
 
-    for (let i = 0; i < stocks_array.length; i++) {
-      const stock = stocks_array[i];
-      const priceRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${stock.name}&token=${apiKey}`);
+    for (let stock of stocks_array) {
+      const symbol = stock.symbol || stock.name;
+      const priceRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKeyParam}`);
       const priceData = await priceRes.json();
       const price = priceData.c || 0;
       const totalValue = price * stock.amount;
 
-      stock_names.push(stock.name);
+      stock_names.push(symbol);
       stock_values.push(totalValue);
-
       if (totalValue > maxValue) maxValue = totalValue;
     }
 
-    const backgroundColor = [];
-    for (let i = 0; i < stock_values.length; i++) {
-      backgroundColor[i] = stock_values[i] === maxValue ? 'green' : 'gray';
-    }
+    const backgroundColor = stock_values.map(val => val === maxValue ? 'green' : 'gray');
 
     new Chart(ctx, {
       type: 'bar',
-      data: {
-        labels: stock_names,
-        datasets: [{
-          label: 'Stock Total Value',
-          data: stock_values,
-          backgroundColor
-        }]
-      },
-      options: {
-        indexAxis: 'y',
-        elements: { bar: { borderWidth: 2 } },
-        responsive: true,
-        plugins: { legend: { position: 'right' }, title: { display: false } }
-      }
+      data: { labels: stock_names, datasets: [{ label: 'Stock Total Value', data: stock_values, backgroundColor }] },
+      options: { indexAxis: 'y', elements: { bar: { borderWidth: 2 } }, responsive: true }
     });
 
   } catch (err) {
@@ -215,9 +206,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 }
 
-
-
-  async function renderStocks(stocks) {
+async function renderStocks(stocks) {
     const tbody = document.getElementById('stocks');
     tbody.innerHTML = '';
 
@@ -228,7 +217,6 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`);
         const data = await res.json();
-
         if (!data || typeof data.c !== "number" || data.c === 0) {
           alert(`Stock symbol "${symbol}" not found. It will not be added.`);
           continue;
@@ -257,29 +245,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const tbody = document.getElementById('expenses');
     tbody.innerHTML = '';
     expenses.forEach(exp => {
-      const name = exp.name || '';
-      const amount = exp.amount || 0;
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${name}: $${amount}</td>`;
+      tr.innerHTML = `<td>${exp.name}: $${exp.amount}</td>`;
       tbody.appendChild(tr);
-    });
-  }
-
-  let savingsChart;
-
-  function renderSavingsChart(expenses, income) {
-    const ctx = document.getElementById('savings_plan').getContext('2d');
-    const totalExpenses = expenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
-    const savings = income - totalExpenses;
-
-    if (savingsChart) savingsChart.destroy();
-
-    savingsChart = new Chart(ctx, {
-      type: 'doughnut',
-      data: {
-        labels: ['Expenses', 'Savings'],
-        datasets: [{ data: [totalExpenses, savings], backgroundColor: ['#ff6384', '#36a2eb'] }]
-      }
     });
   }
 
@@ -311,7 +279,6 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     const symbol = document.getElementById('StockSymbol').value.toUpperCase();
     const amount = Number(document.getElementById('shares').value);
-    
     if (!symbol || amount <= 0) return alert("Enter a valid symbol and amount");
 
     try {
