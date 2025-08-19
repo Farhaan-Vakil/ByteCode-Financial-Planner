@@ -4,70 +4,113 @@
   <meta charset="UTF-8">
   <title>Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    .top-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+    }
+    .controls {
+      flex: 1;
+      min-width: 300px;
+    }
+    .chart-container {
+      width: 50%;
+      max-width: 400px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 20px;
+    }
+    table, th, td {
+      border: 1px solid black;
+    }
+    th, td {
+      padding: 5px;
+      text-align: left;
+    }
+  </style>
 </head>
 <body>
-  <h2 id="greeting"></h2>
 
-  <form id="incomeForm">
-    <label for="income">Income:</label>
-    <input type="number" id="income" name="income" required />
-    <button type="submit">Update Income</button>
-  </form>
+<h2 id="greeting"></h2>
 
-  <p id="incomeDisplay"></p>
+<div class="top-container">
+  <div class="controls">
+    <form id="incomeForm">
+      <label for="income">Income:</label>
+      <input type="number" id="income" name="income" required />
+      <button type="submit">Update Income</button>
+    </form>
 
-  <div id="investControls" style="margin: 10px 0;">
-    <label for="percentSlider">Percentage to Invest:</label>
-    <input type="range" id="percentSlider" min="0" max="100" value="33" />
-    <span id="investPercent">33%</span>
-    <br />
-    <strong>Investment Amount:</strong>
-    $<span id="investAmount">0.00</span>
+    <p id="incomeDisplay"></p>
+
+    <div id="investControls" style="margin: 10px 0;">
+      <label for="percentSlider">Percentage to Invest:</label>
+      <input type="range" id="percentSlider" min="0" max="100" value="33" />
+      <span id="investPercent">33%</span>
+      <br />
+      <strong>Investment Amount:</strong>
+      $<span id="investAmount">0.00</span>
+    </div>
+
+    <form id="expenseForm">
+      <label for="expenseName">Expense Name:</label>
+      <input type="text" id="expenseName" name="expenseName" required/>
+      <label for="expense">Expense Amount:</label>
+      <input type="number" id="expense" name="expense" required />
+      <button type="submit">Add Expense</button>
+    </form>
+
+    <form id="stockForm">
+      <label for="StockSymbol">Stock Symbol:</label>
+      <input type="text" id="StockSymbol" name="StockSymbol" required/>
+      <label for="shares">Shares:</label>
+      <input type="number" id="shares" name="shares" required />
+      <button type="submit">Add Stock</button>
+    </form>
   </div>
 
-  <form id="expenseForm">
-    <label for="expenseName">Expense Name:</label>
-    <input type="text" id="expenseName" name="expenseName" required/>
-    <label for="expense">Expense Amount:</label>
-    <input type="number" id="expense" name="expense" required />
-    <button type="submit">Add Expense</button>
-  </form>
+  <div class="chart-container">
+    <h3>Savings Plan</h3>
+    <canvas id="savings_plan"></canvas>
+  </div>
+</div>
 
-  <form id="stockForm">
-    <label for="StockSymbol">Stock Symbol:</label>
-    <input type="text" id="StockSymbol" name="StockSymbol" required/>
-    <label for="shares">Shares:</label>
-    <input type="number" id="shares" name="shares" required />
-    <button type="submit">Add Stock</button>
-  </form>
+<h3>Your Expenses</h3>
+<table>
+  <thead><tr><th>Expense</th></tr></thead>
+  <tbody id="expenses"></tbody>
+</table>
 
-  <h3>Your Expenses</h3>
-  <table border="1">
-    <thead><tr><th>Expense</th></tr></thead>
-    <tbody id="expenses"></tbody>
-  </table>
+<h3>Your Stocks</h3>
+<table>
+  <thead><tr><th>Symbol</th><th>Shares</th><th>Price</th><th>Total Value</th></tr></thead>
+  <tbody id="stocks"></tbody>
+</table>
 
-  <h3>Your Stocks</h3>
-  <table border="1">
-    <thead><tr><th>Symbol</th><th>Shares</th><th>Price</th><th>Total Value</th></tr></thead>
-    <tbody id="stocks"></tbody>
-  </table>
+<h3>Delete Stock</h3>
+<input type="text" id="deleteStockSymbol" placeholder="Enter stock symbol (e.g. AAPL)">
+<button id="deleteStockBtn">Delete Stock</button>
 
+<h3>Delete Expense</h3>
+<input type="text" id="deleteExpenseName" placeholder="Enter expense name (e.g. Rent)">
+<button id="deleteExpenseBtn">Delete Expense</button>
 
-  <h3>Delete Stock</h3>
-  <input type="text" id="deleteStockSymbol" placeholder="Enter stock symbol (e.g. AAPL)">
-  <button id="deleteStockBtn">Delete Stock</button>
-
-  <h3>Delete Expense</h3>
-  <input type="text" id="deleteExpenseName" placeholder="Enter expense name (e.g. Rent)">
-  <button id="deleteExpenseBtn">Delete Expense</button>
-
-  <h3>Savings Plan</h3>
-  <canvas id="savings_plan" width="400" height="200"></canvas>
-    <h3>Stock Perfroamnce</h3>
-  <canvas id="stock_performance" width="400" height="200"></canvas>
+<h3>Stock Performance</h3>
+<div style="width: 100%; max-width: 800px; margin-top: 20px;">
+  <canvas id="stock_performance"></canvas>
+</div>
 
 <script>
+let stockChart;
+let savingsChart;
 let apiKey = '';
 const params = new URLSearchParams(window.location.search);
 const email = params.get('email');
@@ -78,7 +121,6 @@ const investPercent = document.getElementById("investPercent");
 const investAmount = document.getElementById("investAmount");
 
 let currentExpenses = [];
-let savingsChart;
 
 function updateInvestmentAmount() {
   const income = parseFloat(incomeInput.value) || 0;
@@ -110,10 +152,10 @@ function renderSavingsChart() {
         data: [totalExpenses, investAmt, savings],
         backgroundColor: ['#ff6384', '#85BB65', '#36a2eb']
       }]
-    }
+    },
+    options: { responsive: true }
   });
 }
-
 slider.addEventListener("input", updateInvestmentAmount);
 incomeInput.addEventListener("input", updateInvestmentAmount);
 
@@ -149,8 +191,7 @@ document.addEventListener("DOMContentLoaded", () => {
     loadDashboard();
   });
 
-
-async function loadDashboard() {
+  async function loadDashboard() {
     const res = await fetch(`/dashboard?email=${encodeURIComponent(email)}`);
     const data = await res.json();
     apiKey = data.apiKey;
@@ -165,48 +206,50 @@ async function loadDashboard() {
 
     if (data.stocks && data.stocks.length > 0) {
       await renderStocks(data.stocks);
-      await load_stocks(data.stocks, apiKey);
+      await loadStocks(data.stocks, apiKey);
     } else {
       document.getElementById('stocks').innerHTML = "<tr><td colspan='4'>No stocks added</td></tr>";
     }
   }
 
-  async function load_stocks(stocks_array, apiKeyParam) {
-  try {
-    if (!stocks_array || !stocks_array.length) return;
+  async function loadStocks(stocks_array, apiKeyParam) {
+    try {
+      if (!stocks_array || !stocks_array.length) return;
 
-    const ctx = document.getElementById('stock_performance').getContext('2d');
+      const ctx = document.getElementById('stock_performance').getContext('2d');
 
-    const stock_names = [];
-    const stock_values = [];
-    let maxValue = 0;
+      const stock_names = [];
+      const stock_values = [];
+      let maxValue = 0;
 
-    for (let stock of stocks_array) {
-      const symbol = stock.symbol || stock.name;
-      const priceRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKeyParam}`);
-      const priceData = await priceRes.json();
-      const price = priceData.c || 0;
-      const totalValue = price * stock.amount;
+      for (let stock of stocks_array) {
+        const symbol = stock.symbol || stock.name;
+        const priceRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKeyParam}`);
+        const priceData = await priceRes.json();
+        const price = priceData.c || 0;
+        const totalValue = price * stock.amount;
 
-      stock_names.push(symbol);
-      stock_values.push(totalValue);
-      if (totalValue > maxValue) maxValue = totalValue;
+        stock_names.push(symbol);
+        stock_values.push(totalValue);
+        if (totalValue > maxValue) maxValue = totalValue;
+      }
+
+      const backgroundColor = stock_values.map(val => val === maxValue ? 'green' : 'gray');
+
+      if (stockChart) stockChart.destroy();
+
+      stockChart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: stock_names, datasets: [{ label: 'Stock Total Value', data: stock_values, backgroundColor }] },
+        options: { indexAxis: 'y', responsive: true }
+      });
+
+    } catch (err) {
+      console.error('Failed to load stock performance:', err);
     }
-
-    const backgroundColor = stock_values.map(val => val === maxValue ? 'green' : 'gray');
-
-    new Chart(ctx, {
-      type: 'bar',
-      data: { labels: stock_names, datasets: [{ label: 'Stock Total Value', data: stock_values, backgroundColor }] },
-      options: { indexAxis: 'y', elements: { bar: { borderWidth: 2 } }, responsive: true }
-    });
-
-  } catch (err) {
-    console.error('Failed to load stock performance:', err);
   }
-}
 
-async function renderStocks(stocks) {
+  async function renderStocks(stocks) {
     const tbody = document.getElementById('stocks');
     tbody.innerHTML = '';
 
@@ -236,7 +279,6 @@ async function renderStocks(stocks) {
 
       } catch (err) {
         console.error(`Error fetching price for ${symbol}`, err);
-        alert(`Error fetching price for ${symbol}`);
       }
     }
   }

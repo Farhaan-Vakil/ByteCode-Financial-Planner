@@ -189,23 +189,25 @@ app.post('/add-expense', async (req, res) => {
   }
 });
 app.post('/add-stock', async (req, res) => {
-  const { email, StockSymbol, shares, budgetIndex } = req.body;
+  const { email, symbol, amount, budgetIndex } = req.body;
 
-  if (!StockSymbol || !shares) {
+  if (!symbol || !amount) {
     return res.status(400).json({ message: 'Stock symbol and amount are required' });
   }
-  const symbol = StockSymbol.toUpperCase();
+
+  const stockSymbol = symbol.toUpperCase();
+  const shares = Number(amount);
 
   try {
     const stockQuote = await new Promise((resolve, reject) => {
-      finnhubClient.quote(symbol, (err, data, response) => {
+      finnhubClient.quote(stockSymbol, (err, data) => {
         if (err) return reject(err);
         resolve(data);
       });
     });
 
     if (!stockQuote || typeof stockQuote.c !== "number" || stockQuote.c === 0) {
-      return res.status(400).json({ message: `Stock symbol "${symbol}" not found` });
+      return res.status(400).json({ message: `Stock symbol "${stockSymbol}" not found` });
     }
 
     const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
@@ -216,11 +218,12 @@ app.post('/add-stock', async (req, res) => {
 
     const idx = (budgetIndex !== undefined && budgetIndex >= 0 && budgetIndex < budgets.length) ? budgetIndex : 0;
     if (!Array.isArray(budgets[idx].stocks)) budgets[idx].stocks = [];
-    const existingStock = budgets[idx].stocks.find(s => s.symbol === symbol);
+
+    const existingStock = budgets[idx].stocks.find(s => s.symbol.toUpperCase() === stockSymbol);
     if (existingStock) {
-      existingStock.amount = Number(shares);
+      existingStock.amount = shares;
     } else {
-      budgets[idx].stocks.push({ symbol, amount: Number(shares) });
+      budgets[idx].stocks.push({ symbol: stockSymbol, amount: shares });
     }
 
     await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
@@ -231,7 +234,6 @@ app.post('/add-stock', async (req, res) => {
     res.status(500).json({ message: 'Server error adding stock' });
   }
 });
-
 
 app.post('/delete-stock', async (req, res) => {
   const { email, symbol, budgetIndex } = req.body;
