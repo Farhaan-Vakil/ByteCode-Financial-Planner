@@ -109,12 +109,14 @@ app.get('/dashboard', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
 
     const username = userRes.rows[0].username;
-    const budgets = userRes.rows[0].budgets || [];
-    const latestBudget =
-      budgets.length > 0
-        ? budgets[budgets.length - 1]
-        : { income: null, expenses: [] };
-    const income = latestBudget.income || null;
+    let budgets = userRes.rows[0].budgets || [];
+
+    if (budgets.length === 0) {
+      budgets = [{ income: 0, expenses: [], stocks: [] }];
+    }
+
+    const latestBudget = budgets[budgets.length - 1];
+    const income = latestBudget.income || 0;
     const expenses = latestBudget.expenses || [];
     const stocks = latestBudget.stocks || [];
 
@@ -137,11 +139,10 @@ app.post('/update-income', async (req, res) => {
     const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
     let budgets = userRes.rows.length > 0 && userRes.rows[0].budgets ? userRes.rows[0].budgets : [];
     if (budgets.length === 0) {
-      budgets = [{ income: Number(income), expenses: {} }];
-    } else if (budgetIndex === undefined || budgetIndex < 0 || budgetIndex >= budgets.length) {
-      return res.status(400).json({ message: 'Invalid budget index' });
+      budgets = [{ income: Number(income), expenses: [], stocks: [] }];
     } else {
-      budgets[budgetIndex].income = Number(income);
+      const idx = (budgetIndex !== undefined && budgetIndex >= 0 && budgetIndex < budgets.length) ? budgetIndex : 0;
+      budgets[idx].income = Number(income);
     }
     await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
     res.json({ message: 'Income updated' });
@@ -155,14 +156,21 @@ app.post('/add-expense', async (req, res) => {
   try {
     const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
     let budgets = userRes.rows.length > 0 && userRes.rows[0].budgets ? userRes.rows[0].budgets : [];
-    if (budgets.length === 0 || budgetIndex === undefined || budgetIndex < 0 || budgetIndex >= budgets.length) {
-      return res.status(400).json({ message: 'Invalid budget index' });
+
+    if (budgets.length === 0) {
+      budgets = [{ income: 0, expenses: [], stocks: [] }];
     }
-    budgets[budgetIndex].expenses = budgets[budgetIndex].expenses || [];
-    budgets[budgetIndex].expenses.push({ name: expenseName, amount: Number(expense) });
+
+    const idx = (budgetIndex !== undefined && budgetIndex >= 0 && budgetIndex < budgets.length) ? budgetIndex : 0;
+    if (!Array.isArray(budgets[idx].expenses)) budgets[idx].expenses = [];
+    if (!Array.isArray(budgets[idx].stocks)) budgets[idx].stocks = [];
+    budgets[idx].expenses = budgets[idx].expenses || [];
+    budgets[idx].expenses.push({ name: expenseName, amount: Number(expense) });
+
     await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
-    res.json({ message: 'Expense updated' });
+    res.json({ message: 'Expense added' });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -171,14 +179,19 @@ app.post('/add-stock', async (req, res) => {
   try {
     const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
     let budgets = userRes.rows.length > 0 && userRes.rows[0].budgets ? userRes.rows[0].budgets : [];
-    if (budgets.length === 0 || budgetIndex === undefined || budgetIndex < 0 || budgetIndex >= budgets.length) {
-      return res.status(400).json({ message: 'Invalid budget index' });
+
+    if (budgets.length === 0) {
+      budgets = [{ income: 0, expenses: [], stocks: [] }];
     }
-    budgets[budgetIndex].stocks = budgets[budgetIndex].stocks || [];
-    budgets[budgetIndex].stocks.push({ name: StockSymbol, amount: Number(shares) });
+
+    const idx = (budgetIndex !== undefined && budgetIndex >= 0 && budgetIndex < budgets.length) ? budgetIndex : 0;
+    budgets[idx].stocks = budgets[idx].stocks || [];
+    budgets[idx].stocks.push({ name: StockSymbol, amount: Number(shares) });
+
     await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
-    res.json({ message: 'Expense updated' });
+    res.json({ message: 'Stock added' });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 });
