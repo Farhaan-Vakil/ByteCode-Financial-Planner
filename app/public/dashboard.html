@@ -4,9 +4,6 @@
   <meta charset="UTF-8">
   <title>Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-  <script src="index.js" defer></script>
-  <script src="graphs.js" defer></script>
-  <script src="stock.js" defer></script>
 </head>
 <body>
   <h2 id="greeting"></h2>
@@ -28,13 +25,12 @@
     <button type="submit">Add Expense</button>
   </form>
 
-  <form id = "stockForm">
+  <form id="stockForm">
     <label for="StockSymbol">Stock Symbol:</label>
     <input type="text" id="StockSymbol" name="StockSymbol" required/>
     <label for="shares">Shares:</label>
     <input type="number" id="shares" name="shares" required />
     <button type="submit">Add Stock</button>
-  </form>
   </form>
 
   <h3>Your Expenses</h3>
@@ -47,141 +43,222 @@
     <tbody id="expenses"></tbody>
   </table>
 
-<h3>Your Stocks</h3>
-<table border="1">
-  <thead>
-    <tr>
-      <th>Symbol</th>
-      <th>Shares</th>
-      <th>Price</th>
-      <th>Total Value</th>
-    </tr>
-  </thead>
-  <tbody id="stocks"></tbody>
-</table>
+  <h3>Your Stocks</h3>
+  <table border="1">
+    <thead>
+      <tr>
+        <th>Symbol</th>
+        <th>Shares</th>
+        <th>Price</th>
+        <th>Total Value</th>
+      </tr>
+    </thead>
+    <tbody id="stocks"></tbody>
+  </table>
+
+  <h3>Delete Stock</h3>
+  <input type="text" id="deleteStockSymbol" placeholder="Enter stock symbol (e.g. AAPL)">
+  <button id="deleteStockBtn">Delete Stock</button>
+
+  <h3>Delete Expense</h3>
+  <input type="text" id="deleteExpenseName" placeholder="Enter expense name (e.g. Rent)">
+  <button id="deleteExpenseBtn">Delete Expense</button>
 
   <h3>Savings Plan</h3>
   <canvas id="savings_plan" width="400" height="200"></canvas>
 
-  <script>
-    let apiKey = '';
-    document.addEventListener("DOMContentLoaded", () => {
-      const params = new URLSearchParams(window.location.search);
-      const email = params.get('email');
+<script>
+let apiKey = '';
+const params = new URLSearchParams(window.location.search);
+const email = params.get('email');
 
-      async function loadDashboard() {
-        const res = await fetch(`/dashboard?email=${encodeURIComponent(email)}`);
-        const data = await res.json();
-        apiKey = data.apiKey;
-        document.getElementById('greeting').textContent = `Hello, ${data.username}!`;
-        document.getElementById('income').value = data.income || '';
-        document.getElementById('incomeDisplay').textContent = `Current Income: ${data.income ?? 'Not set'}`;
-        renderExpenses(data.expenses);
+document.addEventListener("DOMContentLoaded", () => {
 
-        if (document.getElementById('savings_plan')) {
-          renderSavingsChart(data.expenses, data.income);
-        }
-        
-        if (data.stocks && data.stocks.length > 0) {
-          await renderStocks(data.stocks);
-        } else {
-          document.getElementById('stocks').innerHTML = "<tr><td colspan='4'>No stocks added</td></tr>";
-        }
-      }
-      async function renderStocks(stocks) {
-        const tbody = document.getElementById('stocks');
-        tbody.innerHTML = '';
+  document.getElementById("deleteStockBtn").addEventListener("click", async () => {
+    const symbol = document.getElementById("deleteStockSymbol").value;
+    if (!symbol) return alert("Enter a stock symbol");
 
-        for (const stock of stocks) {
-          try {
-            const priceRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${stock.name}&token=${apiKey}`);
-            const priceData = await priceRes.json();
-            const price = priceData.c || 0;
-            const totalValue = (price * stock.amount).toFixed(2);
-
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-              <td><a href="stockNews.html?stockSymbol=${stock.name}">${stock.name}</a></td>
-              <td>${stock.amount}</td>
-              <td>$${price.toFixed(2)}</td>
-              <td>$${totalValue}</td>
-            `;
-            tbody.appendChild(tr);
-          } catch (err) {
-            console.error(`Error fetching price for ${stock.name}`, err);
-          }
-        }
-      }
-      function renderExpenses(expenses) {
-        const tbody = document.getElementById('expenses');
-        tbody.innerHTML = '';
-        expenses.forEach(exp => {
-          const name = exp.name || exp.expenseName || '';
-          const amount = exp.amount || exp.expense || '';
-          const tr = document.createElement('tr');
-          tr.innerHTML = `<td>${name}: $${amount}</td>`;
-          tbody.appendChild(tr);
-        });
-      }
-
-      function renderSavingsChart(expenses, income) {
-        const ctx = document.getElementById('savings_plan').getContext('2d');
-        const totalExpenses = expenses.reduce((sum, exp) => sum + Number(exp.amount || exp.expense || 0), 0);
-        const savings = income - totalExpenses;
-
-        new Chart(ctx, {
-          type: 'doughnut',
-          data: {
-            labels: ['Expenses', 'Savings'],
-            datasets: [{
-              data: [totalExpenses, savings],
-              backgroundColor: ['#ff6384', '#36a2eb']
-            }]
-          }
-        });
-      }
-
-      document.getElementById('incomeForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const income = document.getElementById('income').value;
-        const budgetIndex = 0;
-        await fetch('/update-income', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, income, budgetIndex }),
-        });
-        loadDashboard();
-      });
-
-      document.getElementById('expenseForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const expenseName = document.getElementById('expenseName').value;
-        const expense = document.getElementById('expense').value;
-        const budgetIndex = 0;
-        await fetch('/add-expense', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, expenseName, expense, budgetIndex }),
-        });
-        loadDashboard();
-        e.target.reset();
-      });
-
-      document.getElementById('stockForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const StockSymbol = document.getElementById('StockSymbol').value;
-        const shares = document.getElementById('shares').value;
-        const budgetIndex = 0;
-        await fetch('/add-stock', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, StockSymbol, shares, budgetIndex }),
-        });
-        loadDashboard();
-        e.target.reset();
-      });
-      loadDashboard();
+    const res = await fetch("/delete-stock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, symbol })
     });
-  </script>
+
+    if (!res.ok) {
+      const error = await res.text();
+      return alert(`Error: ${error}`);
+    }
+
+    const data = await res.json();
+    alert(data.message);
+    location.reload();
+  });
+
+  document.getElementById("deleteExpenseBtn").addEventListener("click", async () => {
+    const name = document.getElementById("deleteExpenseName").value;
+    if (!name) return alert("Enter an expense name");
+
+    const res = await fetch("/delete-expense", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name })
+    });
+
+    if (!res.ok) {
+      const error = await res.text();
+      return alert(`Error: ${error}`);
+    }
+
+    const data = await res.json();
+    alert(data.message);
+    location.reload();
+  });
+
+  async function loadDashboard() {
+    const res = await fetch(`/dashboard?email=${encodeURIComponent(email)}`);
+    const data = await res.json();
+    apiKey = data.apiKey;
+
+    document.getElementById('greeting').textContent = `Hello, ${data.username}!`;
+    document.getElementById('income').value = data.income || '';
+    document.getElementById('incomeDisplay').textContent = `Current Income: ${data.income ?? 'Not set'}`;
+
+    renderExpenses(data.expenses || []);
+    renderSavingsChart(data.expenses || [], data.income || 0);
+
+    if (data.stocks && data.stocks.length > 0) {
+      await renderStocks(data.stocks);
+    } else {
+      document.getElementById('stocks').innerHTML = "<tr><td colspan='4'>No stocks added</td></tr>";
+    }
+  }
+
+  async function renderStocks(stocks) {
+    const tbody = document.getElementById('stocks');
+    tbody.innerHTML = '';
+
+    const validStocks = [];
+    
+    for (const stock of stocks) {
+      const symbol = stock.symbol || stock.name;
+      if (!symbol || !stock.amount) continue;
+
+      try {
+        const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`);
+        const data = await res.json();
+        if (!data || typeof data.c !== "number" || data.c === 0) {
+          alert(`Stock symbol "${symbol}" not found. It will not be added.`);
+          continue;
+        }
+
+        const price = data.c;
+        const totalValue = (price * stock.amount).toFixed(2);
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><a href="stockNews.html?stockSymbol=${symbol}">${symbol}</a></td>
+          <td>${stock.amount}</td>
+          <td>$${price.toFixed(2)}</td>
+          <td>$${totalValue}</td>
+        `;
+        tbody.appendChild(tr);
+        validStocks.push(stock);
+
+      } catch (err) {
+        console.error(`Error fetching price for ${symbol}`, err);
+        alert(`Error fetching price for ${symbol}`);
+      }
+    }
+  }
+
+  function renderExpenses(expenses) {
+    const tbody = document.getElementById('expenses');
+    tbody.innerHTML = '';
+    expenses.forEach(exp => {
+      const name = exp.name || exp.expenseName || '';
+      const amount = exp.amount || exp.expense || 0;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${name}: $${amount}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+  let savingsChart;
+
+  function renderSavingsChart(expenses, income) {
+    const ctx = document.getElementById('savings_plan').getContext('2d');
+    const totalExpenses = expenses.reduce((sum, exp) => sum + Number(exp.amount || exp.expense || 0), 0);
+    const savings = income - totalExpenses;
+
+    if (savingsChart) savingsChart.destroy();
+
+    savingsChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Expenses', 'Savings'],
+        datasets: [{
+          data: [totalExpenses, savings],
+          backgroundColor: ['#ff6384', '#36a2eb']
+        }]
+      }
+    });
+  }
+
+  document.getElementById('incomeForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const income = document.getElementById('income').value;
+    await fetch('/update-income', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, income, budgetIndex: 0 }),
+    });
+    loadDashboard();
+  });
+
+  document.getElementById('expenseForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const expenseName = document.getElementById('expenseName').value;
+    const expense = document.getElementById('expense').value;
+    await fetch('/add-expense', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, expenseName, expense, budgetIndex: 0 }),
+    });
+    loadDashboard();
+    e.target.reset();
+  });
+
+  document.getElementById('stockForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const symbol = document.getElementById('StockSymbol').value.toUpperCase();
+    const amount = Number(document.getElementById('shares').value);
+    
+    if (!symbol || amount <= 0) return alert("Enter a valid symbol and amount");
+
+    try {
+      const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`);
+      const data = await res.json();
+      
+      if (!data || typeof data.c !== "number" || data.c === 0) {
+        return alert(`Stock symbol "${symbol}" not found or has no price data`);
+      }
+
+      await fetch('/add-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, symbol, amount, budgetIndex: 0 }),
+      });
+
+      loadDashboard();
+      e.target.reset();
+    } catch (err) {
+      console.error(err);
+      alert("Error validating stock symbol");
+    }
+  });
+
+
+  loadDashboard();
+});
+</script>
 </body>
 </html>
