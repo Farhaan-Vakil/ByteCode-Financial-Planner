@@ -63,7 +63,16 @@
   <h3>Savings Plan</h3>
   <canvas id="savings_plan" width="400" height="200"></canvas>
 
+  <h3>Stock perforamnce</h3>
+  <canvas id="stock_performance" width="400" height="200"></canvas>
+
   <script>
+      const pastelColors = [
+        '#ff9aa2','#ffb7b2','#ffdac1','#e2f0cb',
+        '#b5ead7','#c7ceea','#a2d2ff','#bde0fe',
+        '#caffbf','#ffd6a5'
+      ];
+
     let apiKey = '';
     document.addEventListener("DOMContentLoaded", () => {
       const params = new URLSearchParams(window.location.search);
@@ -88,6 +97,61 @@
           document.getElementById('stocks').innerHTML = "<tr><td colspan='4'>No stocks added</td></tr>";
         }
       }
+
+      async function load_stocks() {
+  try {
+    const ctx = document.getElementById('stock_performance').getContext('2d');
+    const stocks_array = await fetch(`/stock_performance?email=${encodeURIComponent(email)}&budgetIndex=0`).then(res => res.json());
+
+    if (!stocks_array.length) return;
+
+    const stock_names = [];
+    const stock_values = [];
+    let maxValue = 0;
+
+    for (let i = 0; i < stocks_array.length; i++) {
+      const stock = stocks_array[i];
+      const priceRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${stock.name}&token=${apiKey}`);
+      const priceData = await priceRes.json();
+      const price = priceData.c || 0;
+      const totalValue = price * stock.amount;
+
+      stock_names.push(stock.name);
+      stock_values.push(totalValue);
+
+      if (totalValue > maxValue) maxValue = totalValue;
+    }
+
+    const backgroundColor = [];
+    for (let i = 0; i < stock_values.length; i++) {
+      backgroundColor[i] = stock_values[i] === maxValue ? 'green' : 'gray';
+    }
+
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: stock_names,
+        datasets: [{
+          label: 'Stock Total Value',
+          data: stock_values,
+          backgroundColor
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        elements: { bar: { borderWidth: 2 } },
+        responsive: true,
+        plugins: { legend: { position: 'right' }, title: { display: false } }
+      }
+    });
+
+  } catch (err) {
+    console.error('Failed to load stock performance:', err);
+  }
+}
+
+
+
       async function renderStocks(stocks) {
         const tbody = document.getElementById('stocks');
         tbody.innerHTML = '';
@@ -180,7 +244,7 @@
         loadDashboard();
         e.target.reset();
       });
-      loadDashboard();
+      loadDashboard().then(load_stocks);
     });
   </script>
 </body>
