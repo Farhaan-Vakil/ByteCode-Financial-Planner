@@ -189,23 +189,25 @@ app.post('/add-expense', async (req, res) => {
   }
 });
 app.post('/add-stock', async (req, res) => {
-  const { email, StockSymbol, shares, budgetIndex } = req.body;
+  const { email, symbol, amount, budgetIndex } = req.body;
 
-  if (!StockSymbol || !shares) {
+  if (!symbol || !amount) {
     return res.status(400).json({ message: 'Stock symbol and amount are required' });
   }
-  const symbol = StockSymbol.toUpperCase();
+
+  const stockSymbol = symbol.toUpperCase();
+  const shares = Number(amount);
 
   try {
     const stockQuote = await new Promise((resolve, reject) => {
-      finnhubClient.quote(symbol, (err, data, response) => {
+      finnhubClient.quote(stockSymbol, (err, data) => {
         if (err) return reject(err);
         resolve(data);
       });
     });
 
     if (!stockQuote || typeof stockQuote.c !== "number" || stockQuote.c === 0) {
-      return res.status(400).json({ message: `Stock symbol "${symbol}" not found` });
+      return res.status(400).json({ message: `Stock symbol "${stockSymbol}" not found` });
     }
 
     const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
@@ -216,11 +218,12 @@ app.post('/add-stock', async (req, res) => {
 
     const idx = (budgetIndex !== undefined && budgetIndex >= 0 && budgetIndex < budgets.length) ? budgetIndex : 0;
     if (!Array.isArray(budgets[idx].stocks)) budgets[idx].stocks = [];
-    const existingStock = budgets[idx].stocks.find(s => s.symbol === symbol);
+
+    const existingStock = budgets[idx].stocks.find(s => s.symbol.toUpperCase() === stockSymbol);
     if (existingStock) {
-      existingStock.amount = Number(shares);
+      existingStock.amount = shares;
     } else {
-      budgets[idx].stocks.push({ symbol, amount: Number(shares) });
+      budgets[idx].stocks.push({ symbol: stockSymbol, amount: shares });
     }
 
     await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
@@ -231,7 +234,6 @@ app.post('/add-stock', async (req, res) => {
     res.status(500).json({ message: 'Server error adding stock' });
   }
 });
-
 
 app.post('/delete-stock', async (req, res) => {
   const { email, symbol, budgetIndex } = req.body;
@@ -312,43 +314,33 @@ app.get(`/stockNews`, (req,res) => {
 
 //Quite literally the exact same code as the other one 
 //EX: { stock_name: "apple", value: 123.45}
-app.post("/stock_performance", async (req, res) => {
-  try {
-    //LOOP FOR ARRAY SO YOU CAN PUT MULTIPLE THINGS AT ONCE OR MANY
-    const stocksArray = req.body;
-    if (!Array.isArray(stocksArray) || stocksArray.length === 0) {
-      return res.status(400).send("Input should be array of {stock_name, value}");
-    }
-
-    const values = [];
-    const placeholders = stocksArray.map((item, i) => {
-      if (!item.stock_name || typeof item.value !== "number") {
-        throw new Error("This item is invalid :(");
-      }
-      values.push(item.stock_name, item.value);
-      return `($${i * 2 + 1}, $${i * 2 + 2})`;
-    }).join(",");
-
-    const query = `INSERT INTO stock_performance (stock_name, value) VALUES ${placeholders}`;
-    await pool.query(query, values);
-
-    res.status(201).send("Stocks inserted successfully :)");
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Database query failed");
-  }
-});
 
 app.get("/stock_performance", async (req, res) => {
+  const email = req.query.email;
+  const budgetIndex = parseInt(req.query.budgetIndex) || 0;
+
   try {
-    const result = await pool.query("SELECT * FROM stock_performance");
-    res.json(result.rows);
+    const userRes = await pool.query(
+      "SELECT budgets FROM accounts WHERE email = $1",
+      [email]
+    );
+
+    let budgets = (userRes.rows.length > 0 && userRes.rows[0].budgets) 
+      ? userRes.rows[0].budgets 
+      : [];
+
+    if (budgets.length === 0 || budgetIndex < 0 || budgetIndex >= budgets.length) {
+      return res.status(400).json({ message: "Invalid budget index" });
+    }
+
+    budgets[budgetIndex].stocks = budgets[budgetIndex].stocks || {};
+
+    res.json(budgets[budgetIndex].stocks);
   } catch (err) {
     console.error(err);
-    res.status(500).send("Database query failed");
+    res.status(500).send("Failed to get stock performance");
   }
 });
-
 
 //STOCK HISTORY IS A KEYVALUE PAIR CALLED DATA (DATE, VALUE)
 
@@ -357,31 +349,6 @@ app.get("/stock_performance", async (req, res) => {
 //  stock_data: { dec: 12, jan: 45, feb: 67 }
 //}
 //EX
-app.post("/stock_history", async (req, res) => {
-  try {
-    const stocks_array = req.body;
-    if (!Array.isArray(stocks_array) || stocks_array.length === 0) {
-      return res.status(400).send("Input should be array of {stock_name, data}");
-    }
-
-    const values = [];
-    const placeholders = stocks_array.map((item, i) => {
-      if (!item.stock_name || typeof item.data !== "object") {
-        throw new Error("This item is invalid :(");
-      }
-      values.push(item.stock_name, JSON.stringify(item.data));
-      return `($${i * 2 + 1}, $${i * 2 + 2}::jsonb)`;
-    }).join(",");
-
-    const query = `INSERT INTO stock_history (stock_name, data) VALUES ${placeholders}`;
-    await pool.query(query, values);
-
-    res.status(201).send("Stock history inserted successfully :)");
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Database query failed");
-  }
-});
 
 app.get("/stock_history", async (req, res) => {
   try {
