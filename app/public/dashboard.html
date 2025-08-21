@@ -137,6 +137,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const res = await fetch(`/dashboard?email=${encodeURIComponent(email)}`);
     const data = await res.json();
     apiKey = data.apiKey;
+    if (!data || !data.username) {
+      document.body.innerHTML = "<h2>Error loading dashboard. Please log in again.</h2>";
+      setTimeout(() => {
+        window.location.href = "login.html";
+      }, 2000);
+      return;
+    }
 
     document.getElementById('greeting').textContent = `Hello, ${data.username}!`;
     document.getElementById('income').value = data.income || '';
