@@ -18,7 +18,8 @@
     "chart.js": "^4.5.0",
     "express": "^5.1.0",
     "pg": "^8.16.3",
-    "finnhub": "^1.2.1"
+    "finnhub": "^1.2.1",
+    "yahoo-finance2": "^2.0.0"
     }
   }
 
