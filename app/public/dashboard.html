@@ -108,30 +108,16 @@
   <canvas id="stock_performance"></canvas>
 </div>
 
-<h3>Stock What-If</h3>
-<div id="whatIfSection">
- <form id="whatIfForm">
-    <label>Which Stock to test?</label>
-    <input list="stockList" id="stockWhatIf" name="stockWhatIf" placeholder="e.g. AAPL">
-    <datalist id="stockList"> 
-    </datalist>
-
-    <label>How many months ago?</label>
-    <select id="sdate" name="sdate">
-      <option value="1">1 Month</option>
-      <option value="3">3 Months</option>
-      <option value="6">6 Months</option>
-    </select>
-
-    <input type="submit" value="Run WhatIf">
-    <div id="stock"></div>
-  </form>
+<h3>Stock History (Line Chart)</h3>
+<div style="width: 100%; max-width: 800px; margin-top: 20px;">
+  <canvas id="stock_history"></canvas>
 </div>
 
 <script>
 
 let stockChart;
 let savingsChart;
+let stockHistoryChart;
 let apiKey = '';
 const params = new URLSearchParams(window.location.search);
 const email = params.get('email');
@@ -263,7 +249,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const backgroundColor = stock_values.map(val => val === maxValue ? 'green' : 'gray');
-
       if (stockChart) stockChart.destroy();
 
       stockChart = new Chart(ctx, {
@@ -272,6 +257,38 @@ document.addEventListener("DOMContentLoaded", () => {
         options: { indexAxis: 'y', responsive: true }
       });
 
+    const ctxLine = document.getElementById('stock_history').getContext('2d');
+    const datasets = [];
+    const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+    let labels = [];
+
+    for (let i = 0; i < stock_names.length; i++) {
+      const symbol = stock_names[i];
+      const res = await fetch(`/stock-history?symbol=${symbol}`);
+      const data = await res.json(); 
+      if (!data.length) {
+        console.warn(`No historical data for ${symbol}`);
+        continue;
+      }
+
+      if (labels.length === 0) labels = data.map(h => h.date);
+
+      datasets.push({
+        label: symbol,
+        data: data.map(h => h.close),
+        borderColor: colors[i % colors.length],
+        fill: false,
+        tension: 0.1
+      });
+    }
+
+    if (stockHistoryChart) stockHistoryChart.destroy();
+
+    stockHistoryChart = new Chart(ctxLine, {
+      type: 'line',
+      data: { labels, datasets },
+      options: { responsive: true, plugins: { legend: { position: 'top' } } }
+    });
     } catch (err) {
       console.error('Failed to load stock performance:', err);
     }
