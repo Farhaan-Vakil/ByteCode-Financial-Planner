@@ -13,7 +13,7 @@
         const day = String(d.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
  }
-
+module.exports = { getDateNMonthAgo };
 
   function getStockNews(stockSymbol, sdate) {
     fetch(`/stockNews?stockSymbol=${stockSymbol}&sdate=${getDateNMonthAgo(sdate)}&edate=${getDateNMonthAgo(0)}`).then((response) => {

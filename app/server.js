@@ -14,8 +14,7 @@ api_key.apiKey = env.apiKey;
 
 // create client
 const finnhubClient = new finnhub.DefaultApi();
-
-
+const yahooFinance = require('yahoo-finance2').default;
 
 const app = express();
 const hostname = "localhost";
@@ -312,53 +311,37 @@ app.get(`/stockNews`, (req,res) => {
     });
 })
 
-//Quite literally the exact same code as the other one 
-//EX: { stock_name: "apple", value: 123.45}
-
-app.get("/stock_performance", async (req, res) => {
-  const email = req.query.email;
-  const budgetIndex = parseInt(req.query.budgetIndex) || 0;
+app.get('/stock-history', async (req, res) => {
+  const { symbol } = req.query;
+  if (!symbol) return res.status(400).json({ message: 'Stock symbol is required' });
 
   try {
-    const userRes = await pool.query(
-      "SELECT budgets FROM accounts WHERE email = $1",
-      [email]
-    );
+    const period2 = new Date();
+    const period1 = new Date();
+    period1.setFullYear(period1.getFullYear() - 1);
 
-    let budgets = (userRes.rows.length > 0 && userRes.rows[0].budgets) 
-      ? userRes.rows[0].budgets 
-      : [];
+    const result = await yahooFinance.chart(symbol, {
+      period1,
+      period2,
+      interval: '1mo',
+    });
 
-    if (budgets.length === 0 || budgetIndex < 0 || budgetIndex >= budgets.length) {
-      return res.status(400).json({ message: "Invalid budget index" });
+    if (!result?.quotes || result.quotes.length === 0) {
+      return res.status(404).json({ message: `No historical data found for ${symbol}` });
     }
 
-    budgets[budgetIndex].stocks = budgets[budgetIndex].stocks || {};
+    const formatted = result.quotes.map(q => ({
+      date: new Date(q.date).toISOString().split('T')[0],
+      close: q.close,
+    }));
 
-    res.json(budgets[budgetIndex].stocks);
+    res.json(formatted);
   } catch (err) {
-    console.error(err);
-    res.status(500).send("Failed to get stock performance");
+    console.error("Error fetching stock history:", err);
+    res.status(500).json({ message: "Internal server error", error: err.message });
   }
 });
 
-//STOCK HISTORY IS A KEYVALUE PAIR CALLED DATA (DATE, VALUE)
-
-//{
-//  stock_name: "apple",
-//  stock_data: { dec: 12, jan: 45, feb: 67 }
-//}
-//EX
-
-app.get("/stock_history", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT * FROM stock_history");
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Database query failed");
-  }
-});
 
 app.listen(port, hostname, () => {
   console.log(`Server running at http://${hostname}:${port}/`);
