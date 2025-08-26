@@ -1,478 +1,725 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
   <style>
+    * { box-sizing: border-box; }
     body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
+      margin: 0;
+      font-family: "Lato", Arial, sans-serif;
+      background: linear-gradient(-45deg, #f3fcf7, #a2e0b9, #ccf1dc, #f7f7f7);
+      background-size: 400% 400%;
+      animation: gradientShift 20s ease infinite;
+      color: #333;
     }
-    .top-container {
+    @keyframes gradientShift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    h2 { margin: 20px auto 10px; width: 100%; max-width: 1400px; padding: 0 16px; color: #1976d2; }
+    .dashboard-container {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+    .left-col, .right-col {
       display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 20px;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 0;
     }
-    .controls {
-      flex: 1;
-      min-width: 300px;
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      padding: 16px;
+      overflow: hidden;
     }
-    .chart-container {
-      width: 50%;
-      max-width: 400px;
+    .controls { max-height: 460px; overflow-y: auto; }
+    h3 { margin: 0 0 12px; color: #1976d2; }
+    label { font-size: 14px; margin-right: 6px; }
+    input[type="number"], input[type="text"], select {
+      padding: 6px 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      min-width: 120px;
     }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      margin-top: 20px;
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
     }
-    table, th, td {
-      border: 1px solid black;
+    .divider { height: 1px; background: #e5e5e5; margin: 12px 0; }
+    .btn {
+      background: #1976d2;
+      color: #fff;
+      border: 0;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
     }
-    th, td {
-      padding: 5px;
-      text-align: left;
+    .btn:hover { background: #125ea9; }
+    .delete-btn { background: #e53935; }
+    .delete-btn:hover { background: #c62828; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background: #1976d2; color: #fff; }
+    .chart-container { padding: 12px; }
+    .chart-wrap { width: 100%; }
+    #savings_plan { width: 100%; height: 320px; }
+    #stock_performance { width: 100%; height: 280px; }
+    #stock_history { width: 100%; height: 300px; }
+    #what_if_chart { width: 100%; height: 220px; }
+    .full { grid-column: 1 / -1; }
+    .pill {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #f2f6ff;
+      border: 1px solid #d6e2ff;
+      font-size: 13px;
+      margin-right: 8px;
+    }
+    @media (max-width: 1100px) {
+      .dashboard-container { grid-template-columns: 1fr; }
+      .full { grid-column: 1; }
+      #savings_plan { height: 280px; }
+      #stock_performance { height: 260px; }
+      #stock_history { height: 280px; }
     }
   </style>
 </head>
 <body>
+  <h2 id="greeting"></h2>
 
-<h2 id="greeting"></h2>
+  <div class="dashboard-container">
+    <div class="left-col">
+      <div class="card controls">
+        <div class="row">
+          <label for="payInterval">Pay Interval:</label>
+          <select id="payInterval">
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+          <label for="income">Income:</label>
+          <input type="number" id="income" name="income" />
+          <button id="updateIncomeBtn" class="btn">Update</button>
+        </div>
+        <div class="row" id="incomeDisplay" style="font-weight:600;"></div>
+        <div class="row">
+          <label for="percentSlider">Invest %:</label>
+          <input type="range" id="percentSlider" min="0" max="100" value="33" />
+          <span id="investPercent">33%</span>
+        </div>
+        <div class="row" style="font-weight:600;">
+          <span>Investment:</span>
+          <span id="investAmount">$0.00</span>
+        </div>
+        <div class="divider"></div>
+        <h3>Your Expenses</h3>
+        <div class="row">
+          <input type="text" id="expenseName" placeholder="Name" />
+          <input type="number" id="expense" placeholder="Amount" />
+          <button id="addExpenseBtn" class="btn">Add</button>
+        </div>
+        <table>
+          <thead><tr><th>Expense</th><th>Action</th></tr></thead>
+          <tbody id="expenses"></tbody>
+        </table>
+        <div class="divider"></div>
+        <h3>Your Stocks</h3>
+        <div class="row">
+          <input type="text" id="StockSymbol" placeholder="Symbol (e.g., AAPL)" />
+          <input type="number" id="shares" placeholder="Shares" />
+          <button id="addStockBtn" class="btn">Add</button>
+        </div>
+        <table>
+          <thead><tr><th>Symbol</th><th>Shares</th><th>Price</th><th>Total Value</th><th>Action</th></tr></thead>
+          <tbody id="stocks"></tbody>
+        </table>
+      </div>
 
-<div class="top-container">
-  <div class="controls">
-    <form id="incomeForm">
-      <label for="income">Income:</label>
-      <input type="number" id="income" name="income" required />
-      <button type="submit">Update Income</button>
-    </form>
-
-    <p id="incomeDisplay"></p>
-
-    <div id="investControls" style="margin: 10px 0;">
-      <label for="percentSlider">Percentage to Invest:</label>
-      <input type="range" id="percentSlider" min="0" max="100" value="33" />
-      <span id="investPercent">33%</span>
-      <br />
-      <strong>Investment Amount:</strong>
-      $<span id="investAmount">0.00</span>
+      <div class="card chart-container">
+        <h3>Savings Plan</h3>
+        <div class="chart-wrap">
+          <canvas id="savings_plan"></canvas>
+        </div>
+      </div>
     </div>
 
-    <form id="expenseForm">
-      <label for="expenseName">Expense Name:</label>
-      <input type="text" id="expenseName" name="expenseName" required/>
-      <label for="expense">Expense Amount:</label>
-      <input type="number" id="expense" name="expense" required />
-      <button type="submit">Add Expense</button>
-    </form>
+    <div class="right-col">
+      <div class="card chart-container">
+        <h3>Stock Market Viewer</h3>
+        <div class="row">
+          <input type="text" id="stockSearch" placeholder="Search symbol (e.g., AAPL)" />
+          <button id="searchBtn" class="btn">Search</button>
+        </div>
+        <div class="row">
+          <label for="filter">Stock Filter:</label>
+          <select id="filter">
+            <option value="growth">Biggest Growth</option>
+            <option value="lost">Lowest Growth</option>
+            <option value="top15">Top 15</option>
+          </select>
+          <button id="applyFilterBtn" class="btn">Apply Filter</button>
+        </div>
+        <table id="stockTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Symbol</th>
+              <th>Price</th>
+              <th>Change</th>
+              <th>% Change</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
 
-    <form id="stockForm">
-      <label for="StockSymbol">Stock Symbol:</label>
-      <input type="text" id="StockSymbol" name="StockSymbol" required/>
-      <label for="shares">Shares:</label>
-      <input type="number" id="shares" name="shares" required />
-      <button type="submit">Add Stock</button>
-    </form>
+      <div class="card">
+        <h3>What if I bought this back then?</h3>
+        <form id="whatIfForm" class="row" style="align-items:flex-end;">
+          <div class="row">
+            <label for="stockWhatIf">Stock:</label>
+            <input list="stockList" id="stockWhatIf" name="stockWhatIf" placeholder="e.g. AAPL" />
+            <datalist id="stockList"></datalist>
+          </div>
+          <div class="row">
+            <label for="sdate">Months ago:</label>
+            <select id="sdate" name="sdate">
+              <option value="1">1</option>
+              <option value="3" selected>3</option>
+              <option value="6">6</option>
+              <option value="9">9</option>
+              <option value="12">12</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="sharesWhatIf">Shares:</label>
+            <input type="number" id="sharesWhatIf" name="sharesWhatIf" min="1" value="10" />
+          </div>
+          <button type="submit" class="btn">Run</button>
+        </form>
+        <div id="whatIfResult" style="margin-top:10px;"></div>
+        <div class="chart-wrap" style="margin-top:8px;">
+          <canvas id="what_if_chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card chart-container full">
+      <h3>Stock Performance</h3>
+      <div class="chart-wrap">
+        <canvas id="stock_performance"></canvas>
+      </div>
+    </div>
+
+    <div class="card chart-container full">
+      <h3>Stock History</h3>
+      <div class="chart-wrap">
+        <canvas id="stock_history"></canvas>
+      </div>
+    </div>
   </div>
 
-  <div class="chart-container">
-    <h3>Savings Plan</h3>
-    <canvas id="savings_plan"></canvas>
-  </div>
-</div>
+  <script>
+    let apiKey = "";
+    let savingsChart = null;
+    let stockChart = null;
+    let stockHistoryChart = null;
+    let whatIfChart = null;
 
-<h3>Your Expenses</h3>
-<table>
-  <thead><tr><th>Expense</th></tr></thead>
-  <tbody id="expenses"></tbody>
-</table>
+    Chart.register(ChartDataLabels);
 
-<h3>Your Stocks</h3>
-<table>
-  <thead><tr><th>Symbol</th><th>Shares</th><th>Price</th><th>Total Value</th></tr></thead>
-  <tbody id="stocks"></tbody>
-</table>
+    const params = new URLSearchParams(window.location.search);
+    const email = params.get("email");
 
-<h3>Delete Stock</h3>
-<input type="text" id="deleteStockSymbol" placeholder="Enter stock symbol (e.g. AAPL)">
-<button id="deleteStockBtn">Delete Stock</button>
+    const incomeInput = document.getElementById("income");
+    const payInterval = document.getElementById("payInterval");
+    const percentSlider = document.getElementById("percentSlider");
+    const investPercent = document.getElementById("investPercent");
+    const investAmount = document.getElementById("investAmount");
+    const incomeDisplay = document.getElementById("incomeDisplay");
 
-<h3>Delete Expense</h3>
-<input type="text" id="deleteExpenseName" placeholder="Enter expense name (e.g. Rent)">
-<button id="deleteExpenseBtn">Delete Expense</button>
+    const updateIncomeBtn = document.getElementById("updateIncomeBtn");
+    const addExpenseBtn = document.getElementById("addExpenseBtn");
+    const addStockBtn = document.getElementById("addStockBtn");
 
-<h3>Stock Performance</h3>
-<div style="width: 100%; max-width: 800px; margin-top: 20px;">
-  <canvas id="stock_performance"></canvas>
-</div>
+    const expenseNameEl = document.getElementById("expenseName");
+    const expenseEl = document.getElementById("expense");
 
-<h3>Stock History (Line Chart)</h3>
-<div style="width: 100%; max-width: 800px; margin-top: 20px;">
-  <canvas id="stock_history"></canvas>
-</div>
+    const stockSymbolEl = document.getElementById("StockSymbol");
+    const sharesEl = document.getElementById("shares");
 
-<h3>Stock What-If</h3>
-<div id="whatIfSection">
- <form id="whatIfForm">
-    <label>Which Stock to test?</label>
-    <input list="stockList" id="stockWhatIf" name="stockWhatIf" placeholder="e.g. AAPL">
-    <datalist id="stockList"> 
-    </datalist>
+    const expensesBody = document.getElementById("expenses");
+    const stocksBody = document.getElementById("stocks");
 
-    <label>How many months ago?</label>
-    <select id="sdate" name="sdate">
-      <option value="1">1 Month</option>
-      <option value="3">3 Months</option>
-      <option value="6">6 Months</option>
-    </select>
+    const searchBtn = document.getElementById("searchBtn");
+    const applyFilterBtn = document.getElementById("applyFilterBtn");
+    const stockSearch = document.getElementById("stockSearch");
+    const stockTableBody = document.querySelector("#stockTable tbody");
 
-    <label>Number of Shares</label>
-    <input type="number" id="sharesWhatIf" name="sharesWhatIf" min="1" placeholder="e.g. 10">
+    const whatIfForm = document.getElementById("whatIfForm");
+    const stockWhatIf = document.getElementById("stockWhatIf");
+    const sdate = document.getElementById("sdate");
+    const sharesWhatIf = document.getElementById("sharesWhatIf");
+    const whatIfResult = document.getElementById("whatIfResult");
+    const stockList = document.getElementById("stockList");
 
-    <input type="submit" value="Run WhatIf">
-    <div id="stock"></div>
-  </form>
-  <div id="whatIfResult"></div>
-</div>
+    let currentExpenses = [];
+    let currentStocks = [];
 
-<script>
-
-let stockChart;
-let savingsChart;
-let stockHistoryChart;
-let apiKey = '';
-const params = new URLSearchParams(window.location.search);
-const email = params.get('email');
-
-const incomeInput = document.getElementById("income");
-const slider = document.getElementById("percentSlider");
-const investPercent = document.getElementById("investPercent");
-const investAmount = document.getElementById("investAmount");
-
-let currentExpenses = [];
-
-function updateInvestmentAmount() {
-  const income = parseFloat(incomeInput.value) || 0;
-  const totalExpenses = currentExpenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
-  const netIncome = income - totalExpenses;
-  const percent = parseFloat(slider.value);
-  const investAmt = ((percent / 100) * netIncome).toFixed(2);
-
-  investPercent.textContent = percent + "%";
-  investAmount.textContent = investAmt;
-
-  renderSavingsChart();
-}
-
-function renderSavingsChart() {
-  const ctx = document.getElementById('savings_plan').getContext('2d');
-  const income = parseFloat(incomeInput.value) || 0;
-  const totalExpenses = currentExpenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
-  const investAmt = parseFloat(investAmount.textContent) || 0;
-  const savings = income - totalExpenses - investAmt;
-
-  if (savingsChart) savingsChart.destroy();
-
-  savingsChart = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: ['Expenses', 'Investments', 'Savings'],
-      datasets: [{
-        data: [totalExpenses, investAmt, savings],
-        backgroundColor: ['#ff6384', '#85BB65', '#36a2eb']
-      }]
-    },
-    options: { responsive: true }
-  });
-}
-slider.addEventListener("input", updateInvestmentAmount);
-incomeInput.addEventListener("input", updateInvestmentAmount);
-
-document.addEventListener("DOMContentLoaded", () => {
-
-  document.getElementById("deleteStockBtn").addEventListener("click", async () => {
-    const symbol = document.getElementById("deleteStockSymbol").value;
-    if (!symbol) return alert("Enter a stock symbol");
-
-    const res = await fetch("/delete-stock", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, symbol })
-    });
-
-    if (!res.ok) return alert(`Error: ${await res.text()}`);
-    alert((await res.json()).message);
-    loadDashboard();
-  });
-
-  document.getElementById("deleteExpenseBtn").addEventListener("click", async () => {
-    const name = document.getElementById("deleteExpenseName").value;
-    if (!name) return alert("Enter an expense name");
-
-    const res = await fetch("/delete-expense", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, name })
-    });
-
-    if (!res.ok) return alert(`Error: ${await res.text()}`);
-    alert((await res.json()).message);
-    loadDashboard();
-  });
-
-  async function loadDashboard() {
-    const res = await fetch(`/dashboard?email=${encodeURIComponent(email)}`);
-    const data = await res.json();
-    apiKey = data.apiKey;
-    if (!data || !data.username) {
-      document.body.innerHTML = "<h2>Error loading dashboard. Please log in again.</h2>";
-      setTimeout(() => {
-        window.location.href = "login.html";
-      }, 2000);
-      return;
+    function getYearlyIncome() {
+      const raw = parseFloat(incomeInput.value) || 0;
+      const interval = payInterval.value;
+      if (interval === "weekly") { return raw * 52; }
+      if (interval === "monthly") { return raw * 12; }
+      return raw;
     }
 
-    document.getElementById('greeting').textContent = `Hello, ${data.username}!`;
-    document.getElementById('income').value = data.income || '';
-    document.getElementById('incomeDisplay').textContent = `Current Income: ${data.income ?? 'Not set'}`;
-
-    currentExpenses = data.expenses || [];
-    renderExpenses(currentExpenses);
-    updateInvestmentAmount();
-
-    if (data.stocks && data.stocks.length > 0) {
-      await renderStocks(data.stocks);
-      await loadStocks(data.stocks, apiKey);
-    } else {
-      document.getElementById('stocks').innerHTML = "<tr><td colspan='4'>No stocks added</td></tr>";
+    function setIncomeDisplay() {
+      const yearly = getYearlyIncome();
+      incomeDisplay.textContent = "Current Income: " + yearly;
     }
-  }
 
-  async function loadStocks(stocks_array, apiKeyParam) {
-    try {
-      if (!stocks_array || !stocks_array.length) return;
+    function updateInvestmentAmount() {
+      const yearlyIncome = getYearlyIncome();
+      const totalExpenses = currentExpenses.reduce(function (sum, e) {
+        const amt = Number(e.amount || 0);
+        return sum + amt;
+      }, 0);
+      const netIncome = yearlyIncome - totalExpenses;
+      const pct = parseFloat(percentSlider.value);
+      const invest = (pct / 100) * netIncome;
+      investPercent.textContent = pct + "%";
+      investAmount.textContent = "$" + invest.toFixed(2);
+      renderSavingsChart();
+    }
 
-      const ctx = document.getElementById('stock_performance').getContext('2d');
+    function renderSavingsChart() {
+      const yearlyIncome = getYearlyIncome();
+      const totalExpenses = currentExpenses.reduce(function (sum, e) {
+        const amt = Number(e.amount || 0);
+        return sum + amt;
+      }, 0);
+      const invest = parseFloat(investAmount.textContent.replace("$", "")) || 0;
+      const savings = yearlyIncome - totalExpenses - invest;
+      const ctx = document.getElementById("savings_plan").getContext("2d");
+      if (savingsChart) { savingsChart.destroy(); }
+      savingsChart = new Chart(ctx, {
+        type: "doughnut",
+        data: {
+          labels: ["Expenses", "Investments", "Savings"],
+          datasets: [{ data: [totalExpenses, invest, savings], backgroundColor: ["#ff6384", "#85BB65", "#36a2eb"] }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: "top" },
+            datalabels: {
+              color: "#fff",
+              font: { weight: "bold", size: 12 },
+              formatter: function (value) { return "~$" + Math.floor(value); }
+            }
+          }
+        },
+        plugins: [ChartDataLabels]
+      });
+    }
 
-      const stock_names = [];
-      const stock_values = [];
-      let maxValue = 0;
+    function renderExpenses(expenses) {
+      expensesBody.innerHTML = "";
+      expenses.forEach(function (exp) {
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + exp.name + ": $" + exp.amount + "</td>" +
+          '<td><button class="btn delete-btn">Delete</button></td>';
+        const btn = tr.querySelector(".delete-btn");
+        btn.addEventListener("click", async function () {
+          const res = await fetch("/delete-expense", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: email, name: exp.name })
+          });
+          if (res.ok) {
+            currentExpenses = currentExpenses.filter(function (e) { return e.name !== exp.name; });
+            renderExpenses(currentExpenses);
+            updateInvestmentAmount();
+          } else {
+            alert("Error deleting expense");
+          }
+        });
+        expensesBody.appendChild(tr);
+      });
+    }
 
-      for (let stock of stocks_array) {
-        const symbol = stock.symbol || stock.name;
-        const priceRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKeyParam}`);
-        const priceData = await priceRes.json();
-        const price = priceData.c || 0;
-        const totalValue = price * stock.amount;
-
-        stock_names.push(symbol);
-        stock_values.push(totalValue);
-        if (totalValue > maxValue) maxValue = totalValue;
+    async function renderStocks(stocks) {
+      stocksBody.innerHTML = "";
+      stockList.innerHTML = "";
+      for (const st of stocks) {
+        const symbol = st.symbol;
+        if (!symbol || !st.amount) { continue; }
+        try {
+          const url = "https://finnhub.io/api/v1/quote?symbol=" + symbol + "&token=" + apiKey;
+          const res = await fetch(url);
+          const data = await res.json();
+          if (!data || typeof data.c !== "number" || data.c === 0) { continue; }
+          const price = Number(data.c);
+          const total = (price * Number(st.amount)).toFixed(2);
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td><a href=\"stockNews.html?stockSymbol=" + symbol + "\">" + symbol + "</a></td>" +
+            "<td>" + st.amount + "</td>" +
+            "<td>$" + price.toFixed(2) + "</td>" +
+            "<td>$" + total + "</td>" +
+            '<td><button class="btn delete-btn">Delete</button></td>';
+          const btn = tr.querySelector(".delete-btn");
+          btn.addEventListener("click", async function () {
+            const resDel = await fetch("/delete-stock", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email: email, symbol: symbol })
+            });
+            if (resDel.ok) {
+              await loadDashboard();
+            } else {
+              alert("Error deleting stock");
+            }
+          });
+          stocksBody.appendChild(tr);
+          const opt = document.createElement("option");
+          opt.value = symbol;
+          stockList.appendChild(opt);
+        } catch (e) {}
       }
+    }
 
-      const backgroundColor = stock_values.map(val => val === maxValue ? 'green' : 'gray');
-      if (stockChart) stockChart.destroy();
-
+    async function loadStockPerformance(stocks) {
+      const ctx = document.getElementById("stock_performance").getContext("2d");
+      const labels = [];
+      const values = [];
+      for (const st of stocks) {
+        try {
+          const url = "https://finnhub.io/api/v1/quote?symbol=" + st.symbol + "&token=" + apiKey;
+          const res = await fetch(url);
+          const data = await res.json();
+          const total = Math.floor((Number(data.c || 0)) * Number(st.amount));
+          labels.push(st.symbol);
+          values.push(total);
+        } catch (e) {}
+      }
+      if (stockChart) { stockChart.destroy(); }
       stockChart = new Chart(ctx, {
-        type: 'bar',
-        data: { labels: stock_names, datasets: [{ label: 'Stock Total Value', data: stock_values, backgroundColor }] },
-        options: { indexAxis: 'y', responsive: true }
+        type: "bar",
+        data: { labels: labels, datasets: [{ label: "Stock Value", data: values, backgroundColor: "#36a2eb" }] },
+        options: {
+          indexAxis: "y",
+          plugins: { legend: { display: true }, datalabels: { display: false } },
+          scales: { x: { ticks: { callback: function(v) { return v; } } } }
+        }
       });
+    }
 
-    const ctxLine = document.getElementById('stock_history').getContext('2d');
-    const datasets = [];
-    const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
-    let labels = [];
-
-    for (let i = 0; i < stock_names.length; i++) {
-      const symbol = stock_names[i];
-      const res = await fetch(`/stock-history?symbol=${symbol}`);
-      const data = await res.json(); 
-      if (!data.length) {
-        console.warn(`No historical data for ${symbol}`);
-        continue;
+    async function loadStockHistory(stocks) {
+      const ctx = document.getElementById("stock_history").getContext("2d");
+      const datasets = [];
+      let labels = [];
+      for (const st of stocks) {
+        try {
+          const res = await fetch("/stock-history?symbol=" + encodeURIComponent(st.symbol));
+          const data = await res.json();
+          if (!data || !data.length) { continue; }
+          if (labels.length === 0) { labels = data.map(function (d) { return d.date; }); }
+          const color = "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0");
+          datasets.push({
+            label: st.symbol,
+            data: data.map(function (d) { return d.close; }),
+            borderColor: color,
+            backgroundColor: color + "22",
+            fill: false,
+            tension: 0.2
+          });
+        } catch (e) {}
       }
-
-      if (labels.length === 0) labels = data.map(h => h.date);
-
-      datasets.push({
-        label: symbol,
-        data: data.map(h => h.close),
-        borderColor: colors[i % colors.length],
-        fill: false,
-        tension: 0.1
+      if (stockHistoryChart) { stockHistoryChart.destroy(); }
+      stockHistoryChart = new Chart(ctx, {
+        type: "line",
+        data: { labels: labels, datasets: datasets },
+        options: { responsive: true, plugins: { datalabels: { display: false } }, interaction: { intersect: false, mode: "index" } }
       });
     }
 
-    if (stockHistoryChart) stockHistoryChart.destroy();
-
-    stockHistoryChart = new Chart(ctxLine, {
-      type: 'line',
-      data: { labels, datasets },
-      options: { responsive: true, plugins: { legend: { position: 'top' } } }
-    });
-    } catch (err) {
-      console.error('Failed to load stock performance:', err);
+    async function searchStock() {
+      const sym = (stockSearch.value || "").toUpperCase();
+      if (!sym) { alert("Enter a stock symbol"); return; }
+      const url = "https://finnhub.io/api/v1/quote?symbol=" + sym + "&token=" + apiKey;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!data || typeof data.c !== "number") { alert("Stock not found"); return; }
+      stockTableBody.innerHTML =
+        "<tr>" +
+        "<td>" + sym + "</td>" +
+        "<td>" + sym + "</td>" +
+        "<td>$" + data.c.toFixed(2) + "</td>" +
+        "<td>" + (data.d || 0).toFixed(2) + "</td>" +
+        "<td>" + (data.dp || 0).toFixed(2) + "%</td>" +
+        "</tr>";
     }
-  }
 
-  async function renderStocks(stocks) {
-    const tbody = document.getElementById('stocks');
-    tbody.innerHTML = '';
-    document.getElementById('stockList').innerHTML = '';
-  
-    for (const stock of stocks) {
-      const symbol = stock.symbol;
-      if (!symbol || !stock.amount) continue;
+    async function fetchStocksList() {
+      try {
+        const res = await fetch("/top100.json");
+        const data = await res.json();
+        if (Array.isArray(data) && data.length) { return data.slice(0, 15); }
+        return [];
+      } catch (e) {
+        return ["AAPL","MSFT","AMZN","GOOGL","META","NVDA","TSLA","BRK.B","UNH","JNJ","V","XOM","JPM","MA","HD"];
+      }
+    }
+
+    async function fetchStocks() {
+      const symbols = await fetchStocksList();
+      stockTableBody.innerHTML = "";
+      for (const sym of symbols) {
+        try {
+          const url = "https://finnhub.io/api/v1/quote?symbol=" + sym + "&token=" + apiKey;
+          const res = await fetch(url);
+          const data = await res.json();
+          if (!data || typeof data.c !== "number") { continue; }
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td>" + sym + "</td>" +
+            "<td>" + sym + "</td>" +
+            "<td>$" + data.c.toFixed(2) + "</td>" +
+            "<td>" + (data.d || 0).toFixed(2) + "</td>" +
+            "<td>" + (data.dp || 0).toFixed(2) + "%</td>";
+          stockTableBody.appendChild(tr);
+          const opt = document.createElement("option");
+          opt.value = sym;
+          stockList.appendChild(opt);
+        } catch (e) {}
+      }
+    }
+
+    function getDateNMonthAgo(n) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - n);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return year + "-" + month + "-" + day;
+    }
+
+    async function runWhatIf(symbol, months, shares) {
+      const endDate = getDateNMonthAgo(0);
+      const startDate = getDateNMonthAgo(months);
+      const paramsW = new URLSearchParams({
+        stockSymbol: symbol,
+        period1: startDate,
+        period2: endDate,
+        interval: "1d",
+        shares: String(shares)
+      });
 
       try {
-        const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`);
-        const data = await res.json();
-        if (!data || typeof data.c !== "number" || data.c === 0) {
-          alert(`Stock symbol "${symbol}" not found. It will not be added.`);
-          continue;
+        const res = await fetch("/whatIf?" + paramsW.toString());
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.historicalClose !== undefined && data.currentPrice !== undefined) {
+            return data;
+          }
         }
+      } catch (e) {}
 
-        const price = data.c;
-        const totalValue = (price * stock.amount).toFixed(2);
+      const histRes = await fetch("/stock-history?symbol=" + encodeURIComponent(symbol));
+      if (!histRes.ok) { throw new Error("history"); }
+      const hist = await histRes.json();
+      if (!Array.isArray(hist) || !hist.length) { throw new Error("history"); }
 
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><a href="stockNews.html?stockSymbol=${symbol}">${symbol}</a></td>
-          <td>${stock.amount}</td>
-          <td>$${price.toFixed(2)}</td>
-          <td>$${totalValue}</td>
-        `;
-        tbody.appendChild(tr);
+      const start = new Date(startDate);
+      let nearest = null;
+      let minDelta = Infinity;
 
-      
-
-        const option = document.createElement('option');
-        option.value = symbol;
-        document.getElementById('stockList').appendChild(option);
-
-        
-
-      } catch (err) {
-        console.error(`Error fetching price for ${symbol}`, err);
+      for (const p of hist) {
+        const d = new Date(p.date);
+        const delta = Math.abs(d - start);
+        if (delta < minDelta) {
+          minDelta = delta;
+          nearest = p;
+        }
       }
+
+      if (!nearest || typeof nearest.close !== "number") { throw new Error("history"); }
+
+      const quoteUrl = "https://finnhub.io/api/v1/quote?symbol=" + symbol + "&token=" + apiKey;
+      const qRes = await fetch(quoteUrl);
+      const qData = await qRes.json();
+      const currentPrice = Number(qData.c || 0);
+      const historicalClose = Number(nearest.close);
+
+      const valueThen = historicalClose * shares;
+      const valueNow = currentPrice * shares;
+      const difference = valueNow - valueThen;
+
+      let pct = 0;
+      if (historicalClose > 0) {
+        pct = ((currentPrice - historicalClose) / historicalClose) * 100;
+      }
+
+      return {
+        historicalClose: historicalClose,
+        currentPrice: currentPrice,
+        difference: Number(difference.toFixed(2)),
+        percentChange: Number(pct.toFixed(2))
+      };
     }
-  }
 
-  function renderExpenses(expenses) {
-    const tbody = document.getElementById('expenses');
-    tbody.innerHTML = '';
-    expenses.forEach(exp => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${exp.name}: $${exp.amount}</td>`;
-      tbody.appendChild(tr);
-    });
-  }
-
-  document.getElementById('incomeForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    const income = document.getElementById('income').value;
-    await fetch('/update-income', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, income, budgetIndex: 0 }),
-    });
-    loadDashboard();
-  });
-
-  document.getElementById('expenseForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    const expenseName = document.getElementById('expenseName').value;
-    const expense = document.getElementById('expense').value;
-    await fetch('/add-expense', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, expenseName, expense, budgetIndex: 0 }),
-    });
-    loadDashboard();
-    e.target.reset();
-  });
-
-  document.getElementById('stockForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    const symbol = document.getElementById('StockSymbol').value.toUpperCase();
-    const amount = Number(document.getElementById('shares').value);
-    if (!symbol || amount <= 0) return alert("Enter a valid symbol and amount");
-
-    try {
-      const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`);
+    async function drawWhatIfChart(symbol, months) {
+      const res = await fetch("/stock-history?symbol=" + encodeURIComponent(symbol));
       const data = await res.json();
-      if (!data || typeof data.c !== "number" || data.c === 0) {
-        return alert(`Stock symbol "${symbol}" not found or has no price data`);
-      }
+      if (!data || !data.length) { return; }
 
-      await fetch('/add-stock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, symbol, amount, budgetIndex: 0 }),
+      const cutoff = new Date();
+      cutoff.setMonth(cutoff.getMonth() - months);
+
+      const filt = data.filter(function (d) {
+        return new Date(d.date) >= cutoff;
       });
 
-      loadDashboard();
-      e.target.reset();
-    } catch (err) {
-      console.error(err);
-      alert("Error validating stock symbol");
+      const labels = filt.map(function (d) { return d.date; });
+      const values = filt.map(function (d) { return d.close; });
+
+      const ctx = document.getElementById("what_if_chart").getContext("2d");
+      if (whatIfChart) { whatIfChart.destroy(); }
+
+      whatIfChart = new Chart(ctx, {
+        type: "line",
+        data: { labels: labels, datasets: [{ label: symbol, data: values, borderColor: "#7b61ff", fill: false, tension: 0.2 }] },
+        options: { responsive: true, plugins: { datalabels: { display: false }, legend: { display: true } } }
+      });
     }
-  });
 
-  function getDateNMonthAgo(n) {
-        const d = new Date();
-        d.setMonth(d.getMonth() - n); 
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
- }
+    async function loadDashboard() {
+      const res = await fetch("/dashboard?email=" + encodeURIComponent(email));
+      const data = await res.json();
+      apiKey = data.apiKey || "";
+      if (!data || !data.username) {
+        document.body.innerHTML = "<h2>Error loading dashboard. Please log in again.</h2>";
+        setTimeout(function () { window.location.href = "login.html"; }, 1500);
+        return;
+      }
+      document.getElementById("greeting").textContent = "Hello, " + data.username + "!";
+      payInterval.value = "yearly";
+      incomeInput.value = data.income || "";
+      setIncomeDisplay();
+      currentExpenses = Array.isArray(data.expenses) ? data.expenses : [];
+      renderExpenses(currentExpenses);
+      currentStocks = Array.isArray(data.stocks) ? data.stocks : [];
+      await renderStocks(currentStocks);
+      updateInvestmentAmount();
+      if (currentStocks.length) {
+        await loadStockPerformance(currentStocks);
+        await loadStockHistory(currentStocks);
+      }
+      await fetchStocks();
+    }
 
-
-  document.getElementById('whatIfForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    const stockSymbol = document.getElementById('stockWhatIf').value.toUpperCase();
-    const sdate = document.getElementById('sdate').value;
-    const shares = Number(document.getElementById('sharesWhatIf').value);
-
-    if (!stockSymbol) return alert("Enter a stock symbol");
-    if (!sdate) return alert("Select a valid date range");
-
-    const endDate = getDateNMonthAgo(0);
-    const startDate = getDateNMonthAgo(Number(sdate));
-    const interval = "1d";
-    console.log(interval);
-
-    const params = new URLSearchParams({
-      stockSymbol,
-      period1: startDate,
-      period2: endDate,
-      interval,
-      shares
+    updateIncomeBtn.addEventListener("click", async function () {
+      const income = getYearlyIncome();
+      const res = await fetch("/update-income", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email, income: income, budgetIndex: 0 })
+      });
+      if (!res.ok) { alert("Failed to update income"); return; }
+      setIncomeDisplay();
+      updateInvestmentAmount();
     });
 
-    const res = await fetch(`/whatIf?${params.toString()}`);
-    if (!res.ok) return alert(`Error: ${await res.text()}`);
-    const data = await res.json();
-    if (!data || data.historicalClose === undefined) {
-      return alert(`No historical data found for ${stockSymbol}`);
-    } 
-    const resultDiv = document.getElementById('whatIfResult');
-    resultDiv.innerHTML = `
-      <h4>What-If Analysis for ${stockSymbol}</h4>
-      <p>Price ${sdate} month(s) ago for ${shares} share(s): $${data.historicalClose.toFixed(2) * shares}</p>
-      <p>Current Price for ${shares} shares: $${data.currentPrice * shares}</p>
-      <p>Difference: $${data.difference} (${data.percentChange}%)</p>
-    `;
+    addExpenseBtn.addEventListener("click", async function () {
+      const name = (expenseNameEl.value || "").trim();
+      const amount = Number(expenseEl.value);
+      if (!name || !amount) { alert("Enter a valid expense name and amount"); return; }
+      const res = await fetch("/add-expense", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email, expenseName: name, expense: amount, budgetIndex: 0 })
+      });
+      if (!res.ok) { alert("Failed to add expense"); return; }
+      expenseNameEl.value = "";
+      expenseEl.value = "";
+      await loadDashboard();
+    });
 
+    addStockBtn.addEventListener("click", async function () {
+      const symbol = (stockSymbolEl.value || "").toUpperCase();
+      const amount = Number(sharesEl.value);
+      if (!symbol || amount <= 0) { alert("Enter a valid symbol and amount"); return; }
+      try {
+        const url = "https://finnhub.io/api/v1/quote?symbol=" + symbol + "&token=" + apiKey;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!data || typeof data.c !== "number" || data.c === 0) { alert("Invalid stock symbol"); return; }
+        const res2 = await fetch("/add-stock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email, symbol: symbol, amount: amount, budgetIndex: 0 })
+        });
+        if (!res2.ok) { alert("Failed to add stock"); return; }
+        stockSymbolEl.value = "";
+        sharesEl.value = "";
+        await loadDashboard();
+      } catch (e) { alert("Error validating stock symbol"); }
+    });
 
-  });
+    percentSlider.addEventListener("input", function () { updateInvestmentAmount(); setIncomeDisplay(); });
+    incomeInput.addEventListener("input", function () { updateInvestmentAmount(); setIncomeDisplay(); });
+    payInterval.addEventListener("change", function () { updateInvestmentAmount(); setIncomeDisplay(); });
+    searchBtn.addEventListener("click", function () { searchStock(); });
+    applyFilterBtn.addEventListener("click", function () { fetchStocks(); });
 
-  loadDashboard();
-});
-</script>
+    whatIfForm.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const symbol = (stockWhatIf.value || "").toUpperCase();
+      const months = Number(sdate.value);
+      const shares = Number(sharesWhatIf.value);
+      if (!symbol) { alert("Enter a stock symbol"); return; }
+      if (!months || months < 1 || months > 12) { alert("Pick 1–12 months"); return; }
+      if (!shares || shares < 1) { alert("Enter share count"); return; }
+      try {
+        const result = await runWhatIf(symbol, months, shares);
+        if (result && result.historicalClose !== undefined) {
+          const costThen = Number(result.historicalClose) * shares;
+          const valueNow = Number(result.currentPrice) * shares;
+          const diff = Number(result.difference);
+          const pct = Number(result.percentChange);
+          whatIfResult.innerHTML =
+            '<span class="pill">Bought ' + shares + ' @ ' + months + 'm ago</span>' +
+            '<span class="pill">Then: $' + costThen.toFixed(2) + '</span>' +
+            '<span class="pill">Now: $' + valueNow.toFixed(2) + '</span>' +
+            '<span class="pill">P/L: $' + diff.toFixed(2) + ' (' + pct.toFixed(2) + '%)</span>';
+          await drawWhatIfChart(symbol, months);
+        } else {
+          alert("No historical data found for " + symbol);
+        }
+      } catch (e2) {
+        alert("What-if failed");
+      }
+    });
+
+    document.addEventListener("DOMContentLoaded", function () { loadDashboard(); });
+  </script>
 </body>
 </html>
