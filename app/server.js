@@ -1,4 +1,6 @@
+
 const express = require("express");
+const yahooFinance = require("yahoo-finance2").default;
 const bodyParser = require("body-parser");
 const path = require("path");
 const fs = require("fs");
@@ -359,6 +361,38 @@ app.get("/stock_history", async (req, res) => {
     res.status(500).send("Database query failed");
   }
 });
+
+app.get("/whatIf", async (req, res) => {
+  const { stockSymbol, period1, period2, interval } = req.query;
+  if (!stockSymbol || !period1 || !period2 || !interval) {
+    return res.status(400).json({ message: "Missing required query parameters" });
+  }
+  try {
+    const history = await yahooFinance.chart(`${stockSymbol}`, {
+      period1: `${period1}`, // start date
+      period2: `${period2}`, // end date 
+      interval: `${interval}`, // data interval
+    });
+
+    const quotes = history.quotes || [];
+    if (!quotes.length) {
+      return res.status(404).json({ message: "No historical data found" });
+    }
+
+    const historicalClose = quotes[0].close;
+    const quote = await yahooFinance.quote(`${stockSymbol}`);
+    const currentPrice = quote.regularMarketPrice;
+
+    res.json({
+      historicalClose,
+      currentPrice,
+      difference: (currentPrice - historicalClose).toFixed(2),
+      percentChange: (((currentPrice - historicalClose) / historicalClose) * 100).toFixed(2)
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error fetching stock data" });
+  }});
 
 app.listen(port, hostname, () => {
   console.log(`Server running at http://${hostname}:${port}/`);

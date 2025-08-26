@@ -108,7 +108,28 @@
   <canvas id="stock_performance"></canvas>
 </div>
 
+<h3>Stock What-If</h3>
+<div id="whatIfSection">
+ <form id="whatIfForm">
+    <label>Which Stock to test?</label>
+    <input list="stockList" id="stockWhatIf" name="stockWhatIf" placeholder="e.g. AAPL">
+    <datalist id="stockList"> 
+    </datalist>
+
+    <label>How many months ago?</label>
+    <select id="sdate" name="sdate">
+      <option value="1">1 Month</option>
+      <option value="3">3 Months</option>
+      <option value="6">6 Months</option>
+    </select>
+
+    <input type="submit" value="Run WhatIf">
+    <div id="stock"></div>
+  </form>
+</div>
+
 <script>
+
 let stockChart;
 let savingsChart;
 let apiKey = '';
@@ -259,7 +280,8 @@ document.addEventListener("DOMContentLoaded", () => {
   async function renderStocks(stocks) {
     const tbody = document.getElementById('stocks');
     tbody.innerHTML = '';
-
+    document.getElementById('stockList').innerHTML = '';
+  
     for (const stock of stocks) {
       const symbol = stock.symbol;
       if (!symbol || !stock.amount) continue;
@@ -283,6 +305,14 @@ document.addEventListener("DOMContentLoaded", () => {
           <td>$${totalValue}</td>
         `;
         tbody.appendChild(tr);
+
+      
+
+        const option = document.createElement('option');
+        option.value = symbol;
+        document.getElementById('stockList').appendChild(option);
+
+        
 
       } catch (err) {
         console.error(`Error fetching price for ${symbol}`, err);
@@ -349,6 +379,53 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error(err);
       alert("Error validating stock symbol");
     }
+  });
+
+  function getDateNMonthAgo(n) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - n); 
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+ }
+
+
+  document.getElementById('whatIfForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const stockSymbol = document.getElementById('stockWhatIf').value.toUpperCase();
+    const sdate = document.getElementById('sdate').value;
+
+    if (!stockSymbol) return alert("Enter a stock symbol");
+    if (!sdate) return alert("Select a valid date range");
+
+    const endDate = getDateNMonthAgo(0);
+    const startDate = getDateNMonthAgo(Number(sdate));
+    const interval = sdate + "mo";
+    console.log(interval);
+
+    const params = new URLSearchParams({
+      stockSymbol,
+      period1: startDate,
+      period2: endDate,
+      interval
+    });
+
+    const res = await fetch(`/whatIf?${params.toString()}`);
+    if (!res.ok) return alert(`Error: ${await res.text()}`);
+    const data = await res.json();
+    if (!data || !data.historical || data.historical.length === 0) {
+      return alert(`No historical data found for ${stockSymbol}`);
+    } 
+    const resultDiv = document.getElementById('whatIfSection');
+    resultDiv.innerHTML = `
+      <h4>What-If Analysis for ${data.stockSymbol}</h4>
+      <p>Price ${sdate} month(s) ago: $${data.historicalClose}</p>
+      <p>Current Price: $${data.currentPrice}</p>
+      <p>Difference: $${data.difference} (${data.percentChange}%)</p>
+    `;
+
+
   });
 
   loadDashboard();
