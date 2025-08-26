@@ -1,6 +1,5 @@
 
 const express = require("express");
-const yahooFinance = require("yahoo-finance2").default;
 const bodyParser = require("body-parser");
 const path = require("path");
 const fs = require("fs");
@@ -346,16 +345,17 @@ app.get('/stock-history', async (req, res) => {
 
 
 app.get("/whatIf", async (req, res) => {
-  const { stockSymbol, period1, period2, interval } = req.query;
+  const { stockSymbol, period1, period2, interval, shares } = req.query;
   if (!stockSymbol || !period1 || !period2 || !interval) {
     return res.status(400).json({ message: "Missing required query parameters" });
   }
   try {
-    const history = await yahooFinance.chart(`${stockSymbol}`, {
-      period1: `${period1}`, // start date
-      period2: `${period2}`, // end date 
-      interval: `${interval}`, // data interval
+    const history = await yahooFinance.chart(stockSymbol, {
+      period1: period1, // start date
+      period2: period2, // end date 
+      interval: interval, // data interval
     });
+    console.log(period1, period2, interval);
 
     const quotes = history.quotes || [];
     if (!quotes.length) {
@@ -369,8 +369,8 @@ app.get("/whatIf", async (req, res) => {
     res.json({
       historicalClose,
       currentPrice,
-      difference: (currentPrice - historicalClose).toFixed(2),
-      percentChange: (((currentPrice - historicalClose) / historicalClose) * 100).toFixed(2)
+      difference: (currentPrice * shares - historicalClose * shares).toFixed(2),
+      percentChange: (((currentPrice * shares - historicalClose * shares) / historicalClose * shares) * 100).toFixed(2)
     });
   } catch (err) {
     console.error(err);

@@ -113,6 +113,30 @@
   <canvas id="stock_history"></canvas>
 </div>
 
+<h3>Stock What-If</h3>
+<div id="whatIfSection">
+ <form id="whatIfForm">
+    <label>Which Stock to test?</label>
+    <input list="stockList" id="stockWhatIf" name="stockWhatIf" placeholder="e.g. AAPL">
+    <datalist id="stockList"> 
+    </datalist>
+
+    <label>How many months ago?</label>
+    <select id="sdate" name="sdate">
+      <option value="1">1 Month</option>
+      <option value="3">3 Months</option>
+      <option value="6">6 Months</option>
+    </select>
+
+    <label>Number of Shares</label>
+    <input type="number" id="sharesWhatIf" name="sharesWhatIf" min="1" placeholder="e.g. 10">
+
+    <input type="submit" value="Run WhatIf">
+    <div id="stock"></div>
+  </form>
+  <div id="whatIfResult"></div>
+</div>
+
 <script>
 
 let stockChart;
@@ -412,33 +436,35 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     const stockSymbol = document.getElementById('stockWhatIf').value.toUpperCase();
     const sdate = document.getElementById('sdate').value;
+    const shares = Number(document.getElementById('sharesWhatIf').value);
 
     if (!stockSymbol) return alert("Enter a stock symbol");
     if (!sdate) return alert("Select a valid date range");
 
     const endDate = getDateNMonthAgo(0);
     const startDate = getDateNMonthAgo(Number(sdate));
-    const interval = sdate + "mo";
+    const interval = "1d";
     console.log(interval);
 
     const params = new URLSearchParams({
       stockSymbol,
       period1: startDate,
       period2: endDate,
-      interval
+      interval,
+      shares
     });
 
     const res = await fetch(`/whatIf?${params.toString()}`);
     if (!res.ok) return alert(`Error: ${await res.text()}`);
     const data = await res.json();
-    if (!data || !data.historical || data.historical.length === 0) {
+    if (!data || data.historicalClose === undefined) {
       return alert(`No historical data found for ${stockSymbol}`);
     } 
-    const resultDiv = document.getElementById('whatIfSection');
+    const resultDiv = document.getElementById('whatIfResult');
     resultDiv.innerHTML = `
-      <h4>What-If Analysis for ${data.stockSymbol}</h4>
-      <p>Price ${sdate} month(s) ago: $${data.historicalClose}</p>
-      <p>Current Price: $${data.currentPrice}</p>
+      <h4>What-If Analysis for ${stockSymbol}</h4>
+      <p>Price ${sdate} month(s) ago for ${shares} share(s): $${data.historicalClose.toFixed(2) * shares}</p>
+      <p>Current Price for ${shares} shares: $${data.currentPrice * shares}</p>
       <p>Difference: $${data.difference} (${data.percentChange}%)</p>
     `;
 
