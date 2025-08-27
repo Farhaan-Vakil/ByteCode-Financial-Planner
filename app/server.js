@@ -7,19 +7,24 @@ const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
 let finnhub = require("finnhub");
 const env = JSON.parse(fs.readFileSync("../env.json", "utf-8"));
+const session = require("express-session");
 
-
-// configure API key
 const api_key = finnhub.ApiClient.instance.authentications["api_key"];
 api_key.apiKey = env.apiKey;
 
-// create client
 const finnhubClient = new finnhub.DefaultApi();
 const yahooFinance = require('yahoo-finance2').default;
 
 const app = express();
 const hostname = "localhost";
 const port = 3000;
+
+app.use(session({
+  secret: "supersecretkey",        
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: false }    
+}));
 
 //use for AWS Database
 const pool = new Pool({
@@ -86,29 +91,32 @@ app.post('/signup', async (req, res) => {
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
-    const result = await pool.query(
-      "SELECT * FROM accounts WHERE email = $1",
-      [email]
-    );
+    const result = await pool.query("SELECT * FROM accounts WHERE email = $1", [email]);
     if (result.rows.length > 0) {
       const user = result.rows[0];
       const match = await bcrypt.compare(password, user.password);
       if (match) {
-        res.status(200).json({ message: "Login successful!" });
-      } else {
-        res.status(401).json({ message: "Invalid email or password." });
+        req.session.user = { email: user.email, id: user.id };
+        return res.status(200).json({ message: "Login successful!" });
       }
-    } else {
-      res.status(401).json({ message: "Invalid email or password." });
     }
+    res.status(401).json({ message: "Invalid email or password." });
   } catch (err) {
     console.error("Database error:", err);
     res.status(500).json({ message: "Server error." });
   }
 });
 
-app.get('/dashboard', async (req, res) => {
-  const { email } = req.query;
+
+function requireLogin(req, res, next) {
+  if (!req.session.user) {
+    return res.status(401).json({ message: "Not authenticated" });
+  }
+  next();
+}
+
+app.get('/dashboard', requireLogin, async (req, res) => {
+  const email = req.session.user.email;
   try {
     const userRes = await pool.query(
       'SELECT username, budgets FROM accounts WHERE email = $1',
@@ -119,21 +127,14 @@ app.get('/dashboard', async (req, res) => {
 
     const username = userRes.rows[0].username;
     let budgets = userRes.rows[0].budgets || [];
-
-    if (budgets.length === 0) {
-      budgets = [{ income: 0, expenses: [], stocks: [] }];
-    }
-
+    if (budgets.length === 0) budgets = [{ income: 0, expenses: [], stocks: [] }];
     const latestBudget = budgets[budgets.length - 1];
-    const income = latestBudget.income || 0;
-    const expenses = latestBudget.expenses || [];
-    const stocks = latestBudget.stocks || [];
 
     res.json({
       username,
-      income,
-      expenses,
-      stocks,
+      income: latestBudget.income || 0,
+      expenses: latestBudget.expenses || [],
+      stocks: latestBudget.stocks || [],
       apiKey: env.apiKey
     });
   } catch (err) {

@@ -5,17 +5,14 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
   const password = document.getElementById("password").value;
 
   const res = await fetch("/login", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ email, password }),
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  credentials: "include",  
+    body: JSON.stringify({ email, password })
   });
 
-  const data = await res.json();
-  document.getElementById("status").textContent = data.message;
-
   if (res.status === 200) {
-    window.location.href = `dashboard.html?email=${encodeURIComponent(email)}`;
+    window.location.href = "dashboard.html";  
   }
+
 });
