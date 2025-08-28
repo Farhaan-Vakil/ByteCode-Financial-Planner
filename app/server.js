@@ -53,7 +53,7 @@ const pool = new Pool({
   password: env.Local_Password,
   port: env.port
 });
-*/
+
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -352,7 +352,6 @@ app.get('/stock-history', async (req, res) => {
   }
 });
 
-
 app.get("/whatIf", async (req, res) => {
   const { stockSymbol, period1, period2, interval, shares } = req.query;
   if (!stockSymbol || !period1 || !period2 || !interval) {
@@ -389,4 +388,3 @@ app.get("/whatIf", async (req, res) => {
 app.listen(port, "0.0.0.0", () => {
   console.log(`Server running at http://${"0.0.0.0"}:${port}/`);
 });
-

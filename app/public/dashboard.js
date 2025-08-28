@@ -131,23 +131,27 @@ let apiKey = "";
     async function renderStocks(stocks) {
       stocksBody.innerHTML = "";
       stockList.innerHTML = "";
+
       for (const st of stocks) {
         const symbol = st.symbol;
-        if (!symbol || !st.amount) { continue; }
+        if (!symbol || !st.amount) continue;
+
         try {
-          const url = "https://finnhub.io/api/v1/quote?symbol=" + symbol + "&token=" + apiKey;
-          const res = await fetch(url);
+          const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(symbol)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=${st.amount}`);
           const data = await res.json();
-          if (!data || typeof data.c !== "number" || data.c === 0) { continue; }
-          const price = Number(data.c);
+          if (!data || !data.currentPrice) continue;
+
+          const price = Number(data.currentPrice);
           const total = (price * Number(st.amount)).toFixed(2);
+
           const tr = document.createElement("tr");
           tr.innerHTML =
-            "<td><a href=\"stockNews.html?stockSymbol=" + symbol + "\">" + symbol + "</a></td>" +
-            "<td>" + st.amount + "</td>" +
-            "<td>$" + price.toFixed(2) + "</td>" +
-            "<td>$" + total + "</td>" +
+            `<td><a href="stockNews.html?stockSymbol=${symbol}">${symbol}</a></td>` +
+            `<td>${st.amount}</td>` +
+            `<td>$${price.toFixed(2)}</td>` +
+            `<td>$${total}</td>` +
             '<td><button class="btn delete-btn">Delete</button></td>';
+
           const btn = tr.querySelector(".delete-btn");
           btn.addEventListener("click", async function () {
             const resDel = await fetch("/delete-stock", {
@@ -161,11 +165,16 @@ let apiKey = "";
               alert("Error deleting stock");
             }
           });
+
           stocksBody.appendChild(tr);
+
           const opt = document.createElement("option");
           opt.value = symbol;
           stockList.appendChild(opt);
-        } catch (e) {}
+
+        } catch (e) {
+          console.error(`Failed to load stock ${symbol}`, e);
+        }
       }
     }
 
@@ -173,17 +182,20 @@ let apiKey = "";
       const ctx = document.getElementById("stock_performance").getContext("2d");
       const labels = [];
       const values = [];
+
       for (const st of stocks) {
         try {
-          const url = "https://finnhub.io/api/v1/quote?symbol=" + st.symbol + "&token=" + apiKey;
-          const res = await fetch(url);
+          const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(st.symbol)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=${st.amount}`);
           const data = await res.json();
-          const total = Math.floor((Number(data.c || 0)) * Number(st.amount));
+          if (!data || !data.currentPrice) continue;
+
           labels.push(st.symbol);
-          values.push(total);
+          values.push(Math.floor(Number(data.currentPrice) * Number(st.amount)));
         } catch (e) {}
       }
-      if (stockChart) { stockChart.destroy(); }
+
+      if (stockChart) stockChart.destroy();
+
       stockChart = new Chart(ctx, {
         type: "bar",
         data: { labels: labels, datasets: [{ label: "Stock Value", data: values, backgroundColor: "#36a2eb" }] },
@@ -227,26 +239,32 @@ let apiKey = "";
     async function searchStock() {
       const sym = (stockSearch.value || "").toUpperCase();
       if (!sym) { alert("Enter a stock symbol"); return; }
-      const url = "https://finnhub.io/api/v1/quote?symbol=" + sym + "&token=" + apiKey;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (!data || typeof data.c !== "number") { alert("Stock not found"); return; }
-      stockTableBody.innerHTML =
-        "<tr>" +
-        "<td>" + sym + "</td>" +
-        "<td>" + sym + "</td>" +
-        "<td>$" + data.c.toFixed(2) + "</td>" +
-        "<td>" + (data.d || 0).toFixed(2) + "</td>" +
-        "<td>" + (data.dp || 0).toFixed(2) + "%</td>" +
-        "</tr>";
+
+      try {
+        const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(sym)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=1`);
+        const data = await res.json();
+        if (!data || !data.currentPrice) { alert("Stock not found"); return; }
+
+        stockTableBody.innerHTML =
+          `<tr>
+            <td>${sym}</td>
+            <td>${sym}</td>
+            <td>$${Number(data.currentPrice).toFixed(2)}</td>
+            <td>${(data.difference || 0).toFixed(2)}</td>
+            <td>${(data.percentChange || 0).toFixed(2)}%</td>
+          </tr>`;
+      } catch (e) {
+        console.error(e);
+        alert("Error fetching stock data");
+      }
     }
 
-    async function fetchStocksList() {
+   async function fetchStocksList() {
       try {
         const res = await fetch("/top100.json");
         const data = await res.json();
         if (Array.isArray(data) && data.length) { return data.slice(0, 15); }
-        return [];
+        return ["AAPL","MSFT","AMZN","GOOGL","META","NVDA","TSLA","BRK.B","UNH","JNJ","V","XOM","JPM","MA","HD"];
       } catch (e) {
         return ["AAPL","MSFT","AMZN","GOOGL","META","NVDA","TSLA","BRK.B","UNH","JNJ","V","XOM","JPM","MA","HD"];
       }
@@ -255,26 +273,95 @@ let apiKey = "";
     async function fetchStocks() {
       const symbols = await fetchStocksList();
       stockTableBody.innerHTML = "";
+
       for (const sym of symbols) {
         try {
-          const url = "https://finnhub.io/api/v1/quote?symbol=" + sym + "&token=" + apiKey;
-          const res = await fetch(url);
+          const yahooSym = sym.replace(".", "-");
+
+          const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(yahooSym)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=1`);
+          
+          if (!res.ok) {
+            console.warn(`Failed to fetch stock ${sym}: ${res.statusText}`);
+            continue;
+          }
+
           const data = await res.json();
-          if (!data || typeof data.c !== "number") { continue; }
+
+          const price = Number(data.currentPrice || 0);
+          const difference = Number(data.difference || 0);
+          const percentChange = Number(data.percentChange || 0);
+
           const tr = document.createElement("tr");
           tr.innerHTML =
-            "<td>" + sym + "</td>" +
-            "<td>" + sym + "</td>" +
-            "<td>$" + data.c.toFixed(2) + "</td>" +
-            "<td>" + (data.d || 0).toFixed(2) + "</td>" +
-            "<td>" + (data.dp || 0).toFixed(2) + "%</td>";
+            `<td>${sym}</td>` +
+            `<td>${sym}</td>` +
+            `<td>$${price.toFixed(2)}</td>` +
+            `<td>${difference.toFixed(2)}</td>` +
+            `<td>${percentChange.toFixed(2)}%</td>`;
+
           stockTableBody.appendChild(tr);
+
           const opt = document.createElement("option");
           opt.value = sym;
           stockList.appendChild(opt);
-        } catch (e) {}
+
+        } catch (e) {
+          console.error(`Failed to fetch stock ${sym}`, e);
+        }
       }
     }
+    async function fetchStocksList() {
+      try {
+        const res = await fetch("/top100.json");
+        const data = await res.json();
+        if (Array.isArray(data) && data.length) { return data.slice(0, 15); }
+        return ["AAPL","MSFT","AMZN","GOOGL","META","NVDA","TSLA","BRK.B","UNH","JNJ","V","XOM","JPM","MA","HD"];
+      } catch (e) {
+        return ["AAPL","MSFT","AMZN","GOOGL","META","NVDA","TSLA","BRK.B","UNH","JNJ","V","XOM","JPM","MA","HD"];
+      }
+    }
+
+    async function fetchStocks() {
+      const symbols = await fetchStocksList();
+      stockTableBody.innerHTML = "";
+
+      for (const sym of symbols) {
+        try {
+          const yahooSym = sym.replace(".", "-");
+
+          const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(yahooSym)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=1`);
+          
+          if (!res.ok) {
+            console.warn(`Failed to fetch stock ${sym}: ${res.statusText}`);
+            continue;
+          }
+
+          const data = await res.json();
+
+          const price = Number(data.currentPrice || 0);
+          const difference = Number(data.difference || 0);
+          const percentChange = Number(data.percentChange || 0);
+
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            `<td>${sym}</td>` +
+            `<td>${sym}</td>` +
+            `<td>$${price.toFixed(2)}</td>` +
+            `<td>${difference.toFixed(2)}</td>` +
+            `<td>${percentChange.toFixed(2)}%</td>`;
+
+          stockTableBody.appendChild(tr);
+
+          const opt = document.createElement("option");
+          opt.value = sym;
+          stockList.appendChild(opt);
+
+        } catch (e) {
+          console.error(`Failed to fetch stock ${sym}`, e);
+        }
+      }
+    }
+
 
     function getDateNMonthAgo(n) {
       const d = new Date();
