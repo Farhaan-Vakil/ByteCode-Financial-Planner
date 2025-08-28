@@ -5,7 +5,7 @@
   let stockSymbol = urlParams.get('stockSymbol');
   let sdate = 1;
 
-  export function getDateNMonthAgo(n) {
+  function getDateNMonthAgo(n) {
         const d = new Date();
         d.setMonth(d.getMonth() - n); 
         const year = d.getFullYear();

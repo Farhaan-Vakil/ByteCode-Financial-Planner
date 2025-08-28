@@ -89,7 +89,6 @@ let apiKey = "";
         },
         options: {
           responsive: true,
-          maintainAspectRatio: false,
           plugins: {
             legend: { position: "top" },
             datalabels: {
@@ -190,7 +189,6 @@ let apiKey = "";
         data: { labels: labels, datasets: [{ label: "Stock Value", data: values, backgroundColor: "#36a2eb" }] },
         options: {
           indexAxis: "y",
-          maintainAspectRatio: false,
           plugins: { legend: { display: true }, datalabels: { display: false } },
           scales: { x: { ticks: { callback: function(v) { return v; } } } }
         }
@@ -221,7 +219,6 @@ let apiKey = "";
       if (stockHistoryChart) { stockHistoryChart.destroy(); }
       stockHistoryChart = new Chart(ctx, {
         type: "line",
-        maintainAspectRatio: false,
         data: { labels: labels, datasets: datasets },
         options: { responsive: true, plugins: { datalabels: { display: false } }, interaction: { intersect: false, mode: "index" } }
       });
