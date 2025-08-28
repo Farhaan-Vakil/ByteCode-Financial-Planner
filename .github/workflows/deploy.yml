@@ -1,0 +1,39 @@
+name: Deploy Node Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate env.json from GitHub secrets
+        run: |
+          mkdir -p .
+          echo "{" > env.json
+          echo "  \"AWS_User\": \"${{ secrets.AWS_User }}\"," >> env.json
+          echo "  \"AWS_Password\": \"${{ secrets.AWS_Password }}\"," >> env.json
+          echo "  \"RDS_Endpoint\": \"${{ secrets.RDS_Endpoint }}\"," >> env.json
+          echo "  \"database\": \"${{ secrets.database }}\"," >> env.json
+          echo "  \"port\": \"${{ secrets.port }}\"," >> env.json
+          echo "  \"apiKey\": \"${{ secrets.apiKey }}\"" >> env.json
+          echo "}" >> env.json
+
+      - name: Start server
+        run: npm start
+        env:
+          NODE_ENV: production
