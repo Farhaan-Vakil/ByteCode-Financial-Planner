@@ -18,7 +18,7 @@
     fetch(`/stockNews?stockSymbol=${stockSymbol}&sdate=${getDateNMonthAgo(sdate)}&edate=${getDateNMonthAgo(0)}`).then((response) => {
                 response.json().then((body) => {
         articles.innerHTML = "";
-        
+        console.log(sdate)
         for (i = 0; i < body.length; i ++) {
             let article = document.createElement("article");
             let headline = document.createElement("h2");
@@ -35,24 +35,21 @@
             img.src = body[i].image;
             img.alt = body[i].source;
 
+            let time = document.createElement("p2");
+            time.textContent = new Date(body[i].datetime * 1000);
+
             article.appendChild(headline);
             article.appendChild(img);
             article.appendChild(source);
             article.appendChild(sum);
+            article.appendChild(time);
 
             articles.appendChild(article);
         }})})
     
   }     
 
-  
-
-  
   console.log(stockSymbol);
-
-
-
-  
 
   document.getElementById("stock-title").textContent = "News for " + stockSymbol;
 

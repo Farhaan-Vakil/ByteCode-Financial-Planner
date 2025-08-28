@@ -307,7 +307,7 @@ app.get(`/stockNews`, (req,res) => {
             res.status(500).json({error: "failed to fetch stock news"});
         }
         res.status(200).json(data);
-        console.log(data);
+        console.log(data.length);
 
 
     });

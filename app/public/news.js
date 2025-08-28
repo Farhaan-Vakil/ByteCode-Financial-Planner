@@ -1,4 +1,4 @@
-let articles = document.getElementById("articles");
+let articles = document.getElementById("stock");
 
 fetch(`/news`).then((response) => {
     response.json().then((body) => {
