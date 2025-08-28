@@ -25,7 +25,6 @@ const finnhubClient = new finnhub.DefaultApi();
 const yahooFinance = require('yahoo-finance2').default;
 
 const app = express();
-const hostname = "localhost";
 const port = process.env.PORT || 3000;
 
 app.use(session({
@@ -387,7 +386,7 @@ app.get("/whatIf", async (req, res) => {
     res.status(500).json({ message: "Error fetching stock data" });
   }});
 
-app.listen(port, hostname, () => {
-  console.log(`Server running at http://${hostname}:${port}/`);
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Server running at http://${"0.0.0.0"}:${port}/`);
 });
 
