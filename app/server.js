@@ -6,7 +6,8 @@ const fs = require("fs");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
 let finnhub = require("finnhub");
-const env = JSON.parse(fs.readFileSync("../env.json", "utf-8"));
+//Use for local development
+//const env = JSON.parse(fs.readFileSync("../env.json", "utf-8"));
 const session = require("express-session");
 
 const api_key = finnhub.ApiClient.instance.authentications["api_key"];
@@ -18,6 +19,15 @@ const yahooFinance = require('yahoo-finance2').default;
 const app = express();
 const hostname = "localhost";
 const port = 3000;
+//Use for Main Build
+const env = {
+  AWS_User: process.env.AWS_User,
+  AWS_Password: process.env.AWS_Password,
+  RDS_Endpoint: process.env.RDS_Endpoint,
+  database: process.env.database,
+  port: process.env.port,
+  apiKey: process.env.apiKey
+};
 
 app.use(session({
   secret: "supersecretkey",        
