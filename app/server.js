@@ -52,7 +52,7 @@ const pool = new Pool({
   database: env.database,
   password: env.Local_Password,
   port: env.port
-});
+});*/
 
 
 app.use(bodyParser.json());
