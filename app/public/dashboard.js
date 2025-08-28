@@ -80,6 +80,7 @@
         },
         options: {
           responsive: true,
+          maintainAspectRatio: false,
           plugins: {
             legend: { position: "top" },
             datalabels: {
@@ -93,38 +94,6 @@
       });
     }
 
-      function renderSavingsChart() {
-        const yearlyIncome = getYearlyIncome();
-        const totalExpenses = currentExpenses.reduce(function (sum, e) {
-          const amt = Number(e.amount || 0);
-          return sum + amt;
-        }, 0);
-        const invest = parseFloat(investAmount.textContent.replace("$", "")) || 0;
-        const savings = yearlyIncome - totalExpenses - invest;
-        const ctx = document.getElementById("savings_plan").getContext("2d");
-        if (savingsChart) { savingsChart.destroy(); }
-        savingsChart = new Chart(ctx, {
-          type: "doughnut",
-          data: {
-            labels: ["Expenses", "Investments", "Savings"],
-            datasets: [{ data: [totalExpenses, invest, savings], backgroundColor: ["#ff6384", "#85BB65", "#36a2eb"] }]
-          },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: { position: "top" },
-              datalabels: {
-                color: "#fff",
-                font: { weight: "bold", size: 12 },
-                formatter: function (value) { return "~$" + Math.floor(value); }
-              }
-            }
-          },
-          plugins: [ChartDataLabels]
-        });
-      }
-
-      
       function renderExpenses(expenses) {
         expensesBody.innerHTML = "";
         expenses.forEach(exp => {
@@ -222,6 +191,8 @@
           type: "bar",
           data: { labels: labels, datasets: [{ label: "Stock Value", data: values, backgroundColor: "#36a2eb" }] },
           options: {
+            responsive: true,
+            maintainAspectRatio: false,
             indexAxis: "y",
             plugins: { legend: { display: true }, datalabels: { display: false } },
             scales: { x: { ticks: { callback: function(v) { return v; } } } }
@@ -254,7 +225,7 @@
         stockHistoryChart = new Chart(ctx, {
           type: "line",
           data: { labels: labels, datasets: datasets },
-          options: { responsive: true, plugins: { datalabels: { display: false } }, interaction: { intersect: false, mode: "index" } }
+          options: { responsive: true,maintainAspectRatio: false, plugins: { datalabels: { display: false } }, interaction: { intersect: false, mode: "index" } }
         });
       }
 
@@ -479,7 +450,7 @@
         whatIfChart = new Chart(ctx, {
           type: "line",
           data: { labels: labels, datasets: [{ label: symbol, data: values, borderColor: "#7b61ff", fill: false, tension: 0.2 }] },
-          options: { responsive: true, plugins: { datalabels: { display: false }, legend: { display: true } } }
+          options: { responsive: true, maintainAspectRatio: false, plugins: { datalabels: { display: false }, legend: { display: true } } }
         });
       }
 

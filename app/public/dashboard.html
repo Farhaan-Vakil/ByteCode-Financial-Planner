@@ -75,11 +75,8 @@
     th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
     th { background: #1976d2; color: #fff; }
     .chart-container { padding: 12px; }
-    .chart-wrap { width: 100%; }
-    #savings_plan { width: 320px; height: 320px; }
-    #stock_performance { width: 480px; height: 280px; }
-    #stock_history { width: 480px; height: 300px; }
-    #what_if_chart { width: 300px; height: 220px; }
+    .chart-wrap { width: 100%; position: relative; }
+    .chart-wrap canvas { width: 100% !important; height: 100% !important; }
     .full { grid-column: 1 / -1; }
     .pill {
       display: inline-block;
@@ -93,15 +90,11 @@
     @media (max-width: 1100px) {
       .dashboard-container { grid-template-columns: 1fr; }
       .full { grid-column: 1; }
-      #savings_plan { height: 280px; }
-      #stock_performance { height: 260px; }
-      #stock_history { height: 280px; }
     }
   </style>
 </head>
 <body>
   <h2 id="greeting"></h2>
-
   <div class="dashboard-container">
     <div class="left-col">
       <div class="card controls">
@@ -152,7 +145,7 @@
 
       <div class="card chart-container">
         <h3>Savings Plan</h3>
-        <div class="chart-wrap">
+        <div class="chart-wrap" style="padding-bottom:60%;">
           <canvas id="savings_plan"></canvas>
         </div>
       </div>
@@ -213,7 +206,7 @@
           <button type="submit" class="btn">Run</button>
         </form>
         <div id="whatIfResult" style="margin-top:10px;"></div>
-        <div class="chart-wrap" style="margin-top:8px;">
+        <div class="chart-wrap" style="padding-bottom:50%; margin-top:8px;">
           <canvas id="what_if_chart"></canvas>
         </div>
       </div>
@@ -221,14 +214,14 @@
 
     <div class="card chart-container full">
       <h3>Stock Performance</h3>
-      <div class="chart-wrap">
+      <div class="chart-wrap" style="padding-bottom:50%;">
         <canvas id="stock_performance"></canvas>
       </div>
     </div>
 
     <div class="card chart-container full">
       <h3>Stock History</h3>
-      <div class="chart-wrap">
+      <div class="chart-wrap" style="padding-bottom:50%;">
         <canvas id="stock_history"></canvas>
       </div>
     </div>
