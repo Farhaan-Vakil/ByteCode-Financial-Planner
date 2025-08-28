@@ -7,11 +7,11 @@ const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
 let finnhub = require("finnhub");
 //Use for local development
-const env = JSON.parse(fs.readFileSync("../env.json", "utf-8"));
+// const env = JSON.parse(fs.readFileSync("../env.json", "utf-8"));
 const session = require("express-session");
 //Use for Main Build
 
-/*
+
 const env = {
   AWS_User: process.env.AWS_User,
   AWS_Password: process.env.AWS_Password,
@@ -20,7 +20,6 @@ const env = {
   port: process.env.port,
   apiKey: process.env.apiKey
 };
-*/
 
 const api_key = finnhub.ApiClient.instance.authentications["api_key"];
 api_key.apiKey = env.apiKey;
