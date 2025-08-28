@@ -245,6 +245,7 @@ app.post('/add-stock', async (req, res) => {
 });
 
 app.post('/delete-stock', async (req, res) => {
+  console.log('Delete stock request body:', req.body);
   const { email, symbol, budgetIndex } = req.body;
   if (!email) return res.status(400).json({ message: 'Email is required' });
   if (!symbol) return res.status(400).json({ message: 'Stock symbol is required' });
@@ -269,6 +270,7 @@ app.post('/delete-stock', async (req, res) => {
 });
 
 app.post('/delete-expense', async (req, res) => {
+  console.log('Delete expense request body:', req.body);
   const { email, name, budgetIndex } = req.body;
   if (!email) return res.status(400).json({ message: 'Email is required' });
   if (!name) return res.status(400).json({ message: 'Expense name is required' });
@@ -378,7 +380,7 @@ app.get("/whatIf", async (req, res) => {
       historicalClose,
       currentPrice,
       difference: (currentPrice * shares - historicalClose * shares).toFixed(2),
-      percentChange: (((currentPrice * shares - historicalClose * shares) / historicalClose * shares) * 100).toFixed(2)
+      percentChange: ((((currentPrice * shares - historicalClose * shares) / historicalClose * shares) * 100)/shares).toFixed(2)
     });
   } catch (err) {
     console.error(err);
