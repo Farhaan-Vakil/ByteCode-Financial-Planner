@@ -28,10 +28,13 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(session({
-  secret: "supersecretkey",        
+  secret: "supersecretkey",
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false }    
+  cookie: { 
+    secure: true,  
+    sameSite: 'none' 
+  }    
 }));
 
 //use for AWS Database
