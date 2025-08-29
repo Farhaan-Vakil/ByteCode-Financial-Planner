@@ -159,51 +159,55 @@ app.get('/dashboard', requireLogin, async (req, res) => {
 });
 
 
-app.post('/update-income', async (req, res) => {
-  const { email, income, budgetIndex } = req.body;
+app.post('/update-income', requireLogin, async (req, res) => {
+  const { income, budgetIndex } = req.body;
+  const email = req.session.user.email;
+
   try {
     const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
-    let budgets = userRes.rows.length > 0 && userRes.rows[0].budgets ? userRes.rows[0].budgets : [];
-    if (budgets.length === 0) {
-      budgets = [{ income: Number(income), expenses: [], stocks: [] }];
-    } else {
-      const idx = (budgetIndex !== undefined && budgetIndex >= 0 && budgetIndex < budgets.length) ? budgetIndex : 0;
+    if (userRes.rows.length === 0) return res.status(404).json({ message: 'User not found' });
+
+    let budgets = userRes.rows[0].budgets || [];
+    if (budgets.length === 0) budgets = [{ income: Number(income), expenses: [], stocks: [] }];
+    else {
+      const idx = budgetIndex >= 0 && budgetIndex < budgets.length ? budgetIndex : 0;
       budgets[idx].income = Number(income);
     }
-    await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
-    res.json({ message: 'Income updated' });
+
+    await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [budgets, email]);
+    res.json({ message: 'Income updated successfully' });
   } catch (err) {
-    console.error(err);
+    console.error("Update-income error:", err);
     res.status(500).json({ message: 'Server error' });
   }
 });
-// ADD EXPENSE
 app.post('/add-expense', requireLogin, async (req, res) => {
-  const email = req.session.user.email; // get email from session
   const { expenseName, expense, budgetIndex } = req.body;
+  const email = req.session.user.email;
 
   try {
     const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
-    let budgets = userRes.rows.length > 0 && userRes.rows[0].budgets ? userRes.rows[0].budgets : [];
+    let budgets = userRes.rows[0].budgets || [];
     if (budgets.length === 0) budgets = [{ income: 0, expenses: [], stocks: [] }];
 
-    const idx = budgetIndex !== undefined && budgetIndex >= 0 && budgetIndex < budgets.length ? budgetIndex : 0;
-    if (!Array.isArray(budgets[idx].expenses)) budgets[idx].expenses = [];
+    const idx = budgetIndex >= 0 && budgetIndex < budgets.length ? budgetIndex : 0;
+    budgets[idx].expenses = budgets[idx].expenses || [];
 
     const existingExpense = budgets[idx].expenses.find(e => e.name.toLowerCase() === expenseName.toLowerCase());
     if (existingExpense) existingExpense.amount = Number(expense);
     else budgets[idx].expenses.push({ name: expenseName, amount: Number(expense) });
 
-    await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
+    await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [budgets, email]);
     res.json({ message: 'Expense added/updated successfully' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 });
+
 app.post('/add-stock', requireLogin, async (req, res) => {
-  const email = req.session.user.email;
   const { symbol, amount, budgetIndex } = req.body;
+  const email = req.session.user.email;
 
   if (!symbol || !amount) return res.status(400).json({ message: 'Stock symbol and amount are required' });
 
@@ -218,22 +222,22 @@ app.post('/add-stock', requireLogin, async (req, res) => {
       });
     });
 
-    if (!stockQuote || typeof stockQuote.c !== "number" || stockQuote.c === 0) {
+    if (!stockQuote?.c || stockQuote.c === 0) {
       return res.status(400).json({ message: `Stock symbol "${stockSymbol}" not found` });
     }
 
     const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
-    let budgets = userRes.rows.length > 0 && userRes.rows[0].budgets ? userRes.rows[0].budgets : [];
+    let budgets = userRes.rows[0].budgets || [];
     if (budgets.length === 0) budgets = [{ income: 0, expenses: [], stocks: [] }];
 
-    const idx = budgetIndex !== undefined && budgetIndex >= 0 && budgetIndex < budgets.length ? budgetIndex : 0;
-    if (!Array.isArray(budgets[idx].stocks)) budgets[idx].stocks = [];
+    const idx = budgetIndex >= 0 && budgetIndex < budgets.length ? budgetIndex : 0;
+    budgets[idx].stocks = budgets[idx].stocks || [];
 
     const existingStock = budgets[idx].stocks.find(s => s.symbol.toUpperCase() === stockSymbol);
     if (existingStock) existingStock.amount = shares;
     else budgets[idx].stocks.push({ symbol: stockSymbol, amount: shares });
 
-    await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
+    await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [budgets, email]);
     res.json({ message: 'Stock added/updated successfully' });
   } catch (err) {
     console.error(err);
@@ -242,20 +246,19 @@ app.post('/add-stock', requireLogin, async (req, res) => {
 });
 
 app.post('/delete-stock', requireLogin, async (req, res) => {
-  const email = req.session.user.email;
   const { symbol, budgetIndex } = req.body;
+  const email = req.session.user.email;
 
   if (!symbol) return res.status(400).json({ message: 'Stock symbol is required' });
 
   try {
     const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
-    let budgets = userRes.rows.length > 0 && userRes.rows[0].budgets ? userRes.rows[0].budgets : [];
-    const idx = budgetIndex !== undefined ? budgetIndex : 0;
+    let budgets = userRes.rows[0].budgets || [];
+    const idx = budgetIndex >= 0 && budgetIndex < budgets.length ? budgetIndex : 0;
 
-    if (!Array.isArray(budgets[idx].stocks)) budgets[idx].stocks = [];
-    budgets[idx].stocks = budgets[idx].stocks.filter(s => s.symbol.toLowerCase() !== symbol.toLowerCase());
+    budgets[idx].stocks = budgets[idx].stocks?.filter(s => s.symbol.toLowerCase() !== symbol.toLowerCase()) || [];
 
-    await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
+    await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [budgets, email]);
     res.json({ message: `Stock ${symbol} deleted successfully` });
   } catch (err) {
     console.error(err);
@@ -263,27 +266,28 @@ app.post('/delete-stock', requireLogin, async (req, res) => {
   }
 });
 
+
 app.post('/delete-expense', requireLogin, async (req, res) => {
-  const email = req.session.user.email;
   const { name, budgetIndex } = req.body;
+  const email = req.session.user.email;
 
   if (!name) return res.status(400).json({ message: 'Expense name is required' });
 
   try {
     const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
-    let budgets = userRes.rows.length > 0 && userRes.rows[0].budgets ? userRes.rows[0].budgets : [];
-    const idx = budgetIndex !== undefined ? budgetIndex : 0;
+    let budgets = userRes.rows[0].budgets || [];
+    const idx = budgetIndex >= 0 && budgetIndex < budgets.length ? budgetIndex : 0;
 
-    if (!Array.isArray(budgets[idx].expenses)) budgets[idx].expenses = [];
-    budgets[idx].expenses = budgets[idx].expenses.filter(e => e.name.toLowerCase() !== name.toLowerCase());
+    budgets[idx].expenses = budgets[idx].expenses?.filter(e => e.name.toLowerCase() !== name.toLowerCase()) || [];
 
-    await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
+    await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [budgets, email]);
     res.json({ message: `Expense '${name}' deleted successfully` });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 });
+
 
 app.get(`/news`, (req, res) => {
     finnhubClient.marketNews("general", {}, (error, data, response) => {
