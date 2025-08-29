@@ -159,11 +159,12 @@ app.get('/dashboard', requireLogin, async (req, res) => {
 });
 
 
-app.post('/update-income', async (req, res) => {
-  const { email, income, budgetIndex } = req.body;
+app.post('/update-income', requireLogin, async (req, res) => {
+  const email = req.session.user.email; // get email from session
+  const { income, budgetIndex } = req.body;
 
-  if (!email || income === undefined) {
-    return res.status(400).json({ message: "Email and income are required" });
+  if (income === undefined) {
+    return res.status(400).json({ message: "Income is required" });
   }
 
   try {
