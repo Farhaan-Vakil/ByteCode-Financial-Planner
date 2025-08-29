@@ -161,22 +161,36 @@ app.get('/dashboard', requireLogin, async (req, res) => {
 
 app.post('/update-income', async (req, res) => {
   const { email, income, budgetIndex } = req.body;
+
+  if (!email || income === undefined) {
+    return res.status(400).json({ message: "Email and income are required" });
+  }
+
   try {
     const userRes = await pool.query('SELECT budgets FROM accounts WHERE email = $1', [email]);
-    let budgets = userRes.rows.length > 0 && userRes.rows[0].budgets ? userRes.rows[0].budgets : [];
+    let budgets = [];
+
+    if (userRes.rows.length > 0 && userRes.rows[0].budgets) {
+      budgets = typeof userRes.rows[0].budgets === "string"
+        ? JSON.parse(userRes.rows[0].budgets)
+        : userRes.rows[0].budgets;
+    }
+
     if (budgets.length === 0) {
       budgets = [{ income: Number(income), expenses: [], stocks: [] }];
     } else {
       const idx = (budgetIndex !== undefined && budgetIndex >= 0 && budgetIndex < budgets.length) ? budgetIndex : 0;
       budgets[idx].income = Number(income);
     }
+
     await pool.query('UPDATE accounts SET budgets = $1 WHERE email = $2', [JSON.stringify(budgets), email]);
-    res.json({ message: 'Income updated' });
+    res.json({ message: 'Income updated successfully', budgets });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 });
+
 // ADD EXPENSE
 app.post('/add-expense', requireLogin, async (req, res) => {
   const email = req.session.user.email; // get email from session
