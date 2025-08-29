@@ -10,8 +10,6 @@ let finnhub = require("finnhub");
 // const env = JSON.parse(fs.readFileSync("../env.json", "utf-8"));
 const session = require("express-session");
 //Use for Main Build
-
-
 const env = {
   AWS_User: process.env.AWS_User,
   AWS_Password: process.env.AWS_Password,
@@ -41,8 +39,16 @@ app.use(session({
     sameSite: 'none',              
     maxAge: 24 * 60 * 60 * 1000    
   }
+  //Use for local development
+  /*
+  cookie: { 
+    secure: process.env.NODE_ENV === "production", 
+    sameSite: 'lax', 
+    maxAge: 24 * 60 * 60 * 1000
+  }
+  */
 }));
-//use for AWS Database
+
 const pool = new Pool({
   user: env.AWS_User,
   host: env.RDS_Endpoint,
@@ -53,15 +59,6 @@ const pool = new Pool({
     rejectUnauthorized: false,
   },
 });
-/* Use for local database also use npm setup
-const pool = new Pool({
-  user: env.Local_User,
-  host: env.Local_Host,
-  database: env.database,
-  password: env.Local_Password,
-  port: env.port
-});*/
-
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -394,6 +391,13 @@ app.get("/whatIf", async (req, res) => {
     res.status(500).json({ message: "Error fetching stock data" });
   }});
 
+
 app.listen(port, "0.0.0.0", () => {
   console.log(`Server running at http://${"0.0.0.0"}:${port}/`);
 });
+//Use for local development
+/*
+app.listen(port, "localhost", () => {
+  console.log(`Server running at http://${"localhost"}:${port}/`);
+});
+*/

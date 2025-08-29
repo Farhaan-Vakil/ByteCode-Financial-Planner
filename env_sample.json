@@ -1,9 +1,6 @@
 {
 	"AWS_User": "commoncentsdb",
-	"Local_User": "YOURPOSTGRESUSER",
 	"apiKey": "sample",
-	"Local_Password": "YOURPOSTGRESPASSWORD",
-	"Local_Host": "localhost",
 	"RDS_Endpoint": "commoncentsdb.ccx4i6kqahfn.us-east-1.rds.amazonaws.com",
 	"database": "commoncentsdb",
 	"AWS_Password": "PASSWORD",
