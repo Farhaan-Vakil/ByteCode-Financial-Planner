@@ -7,9 +7,9 @@ const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
 let finnhub = require("finnhub");
 //Use for local development
-// const env = JSON.parse(fs.readFileSync("../env.json", "utf-8"));
+const env = JSON.parse(fs.readFileSync("../env.json", "utf-8"));
 const session = require("express-session");
-//Use for Main Build
+/*Use for Main Build
 const env = {
   AWS_User: process.env.AWS_User,
   AWS_Password: process.env.AWS_Password,
@@ -17,7 +17,7 @@ const env = {
   database: process.env.database,
   port: process.env.port,
   apiKey: process.env.apiKey
-};
+};*/
 
 const api_key = finnhub.ApiClient.instance.authentications["api_key"];
 api_key.apiKey = env.apiKey;
@@ -34,19 +34,19 @@ app.use(session({
   secret: "supersecretkey",        
   resave: false,
   saveUninitialized: false,
-  cookie: {
+  /*cookie: {
     secure: true,                  
     sameSite: 'none',              
     maxAge: 24 * 60 * 60 * 1000    
-  }
+  }*/
   //Use for local development
-  /*
+  
   cookie: { 
     secure: process.env.NODE_ENV === "production", 
     sameSite: 'lax', 
     maxAge: 24 * 60 * 60 * 1000
   }
-  */
+  
 }));
 
 const pool = new Pool({
@@ -391,13 +391,12 @@ app.get("/whatIf", async (req, res) => {
     res.status(500).json({ message: "Error fetching stock data" });
   }});
 
-
+/*
 app.listen(port, "0.0.0.0", () => {
   console.log(`Server running at http://${"0.0.0.0"}:${port}/`);
-});
+});*/
 //Use for local development
-/*
+
 app.listen(port, "localhost", () => {
   console.log(`Server running at http://${"localhost"}:${port}/`);
 });
-*/

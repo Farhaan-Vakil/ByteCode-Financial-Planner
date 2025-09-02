@@ -550,14 +550,6 @@
         } catch (e) { alert("Error validating stock symbol"); }
       });
 
-      let sliderTimeout;
-      percentSlider.addEventListener("input", function () {
-        clearTimeout(sliderTimeout);
-        sliderTimeout = setTimeout(() => {
-          updateInvestmentAmount();
-          setIncomeDisplay();
-        }, 200);
-      });
       incomeInput.addEventListener("input", function () { updateInvestmentAmount(); setIncomeDisplay(); });
       payInterval.addEventListener("change", function () { updateInvestmentAmount(); setIncomeDisplay(); });
       searchBtn.addEventListener("click", function () { searchStock(); });
