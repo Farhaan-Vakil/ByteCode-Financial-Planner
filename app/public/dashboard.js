@@ -103,6 +103,7 @@
       const ctx = document.getElementById("savings_plan").getContext("2d");
       if (savingsChart) savingsChart.destroy();
 
+      // break out investments into "Investments (stocks)" and "Other investments"
       const otherInvest = Math.max(0, totalInvestments - stockValue);
 
       const labels = ["Expenses", "Investments (Other)", "Investments (Stocks)", "Savings"];
@@ -138,7 +139,34 @@
       });
     }
 
-    async function renderStocks(stocks) {
+      function renderExpenses(expenses) {
+        expensesBody.innerHTML = "";
+        expenses.forEach(exp => {
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            `<td>${exp.name}: $${exp.amount}</td>` +
+            '<td><button class="btn delete-btn">Delete</button></td>';
+          const btn = tr.querySelector(".delete-btn");
+          btn.addEventListener("click", async () => {
+            const res = await fetch("/delete-expense", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ name: exp.name }) // email removed
+            });
+            if (res.ok) {
+              currentExpenses = currentExpenses.filter(e => e.name !== exp.name);
+              renderExpenses(currentExpenses);
+              updateInvestmentAmount();
+            } else {
+              alert("Error deleting expense");
+            }
+          });
+          expensesBody.appendChild(tr);
+        });
+      }
+
+      async function renderStocks(stocks) {
       stocksBody.innerHTML = "";
       stockList.innerHTML = "";
 
@@ -183,38 +211,67 @@
       }
     }
 
-    async function loadStockPerformance(stocks) {
-      const ctx = document.getElementById("stock_performance").getContext("2d");
-      const labels = [];
-      const values = [];
+      async function loadStockPerformance(stocks) {
+        const ctx = document.getElementById("stock_performance").getContext("2d");
+        const labels = [];
+        const values = [];
 
-      for (const st of stocks) {
-        try {
-          const quote = await fetchQuoteFor(st.symbol);
-          if (!quote || !quote.currentPrice) continue;
-          labels.push(st.symbol);
-          values.push(Math.floor(Number(quote.currentPrice) * Number(st.amount)));
-        } catch (e) {
-          console.warn("loadStockPerformance error", st.symbol, e);
+        for (const st of stocks) {
+          try {
+            const quote = await fetchQuoteFor(st.symbol);
+            if (!quote || !quote.currentPrice) continue;
+            labels.push(st.symbol);
+            values.push(Math.floor(Number(quote.currentPrice) * Number(st.amount)));
+          } catch (e) {
+            console.warn("loadStockPerformance error", st.symbol, e);
+          }
         }
+
+        if (stockChart) stockChart.destroy();
+
+        stockChart = new Chart(ctx, {
+          type: "bar",
+          data: { labels: labels, datasets: [{ label: "Stock Value", data: values, backgroundColor: "#36a2eb" }] },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: "y",
+            plugins: { legend: { display: true }, datalabels: { display: false } },
+            scales: { x: { ticks: { callback: function(v) { return v; } } } }
+          }
+        });
       }
 
-      if (stockChart) stockChart.destroy();
-
-      stockChart = new Chart(ctx, {
-        type: "bar",
-        data: { labels: labels, datasets: [{ label: "Stock Value", data: values, backgroundColor: "#36a2eb" }] },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          indexAxis: "y",
-          plugins: { legend: { display: true }, datalabels: { display: false } },
-          scales: { x: { ticks: { callback: function(v) { return v; } } } }
+      async function loadStockHistory(stocks) {
+        const ctx = document.getElementById("stock_history").getContext("2d");
+        const datasets = [];
+        let labels = [];
+        for (const st of stocks) {
+          try {
+            const res = await fetch("/stock-history?symbol=" + encodeURIComponent(st.symbol));
+            const data = await res.json();
+            if (!data || !data.length) { continue; }
+            if (labels.length === 0) { labels = data.map(function (d) { return d.date; }); }
+            const color = "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0");
+            datasets.push({
+              label: st.symbol,
+              data: data.map(function (d) { return d.close; }),
+              borderColor: color,
+              backgroundColor: color + "22",
+              fill: false,
+              tension: 0.2
+            });
+          } catch (e) {}
         }
-      });
-    }
+        if (stockHistoryChart) { stockHistoryChart.destroy(); }
+        stockHistoryChart = new Chart(ctx, {
+          type: "line",
+          data: { labels: labels, datasets: datasets },
+          options: { responsive: true,maintainAspectRatio: false, plugins: { datalabels: { display: false } }, interaction: { intersect: false, mode: "index" } }
+        });
+      }
 
-    async function searchStock() {
+      async function searchStock() {
       const raw = (stockSearch.value || "").trim();
       const sym = raw.toUpperCase();
       if (!sym) { alert("Enter a stock symbol"); return; }
