@@ -64,7 +64,7 @@
       let stockValue = 0;
       for (const st of currentStocks) {
         try {
-          const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(st.symbol)}&period1=${getDateNMonthAgo(0)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=${st.amount}`);
+          const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(st.symbol)}&period1=${getDateNMonthAgo(1)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=${st.amount}`);
           const data = await res.json();
           if (data && data.currentPrice) {
             stockValue += Number(data.currentPrice) * Number(st.amount);
