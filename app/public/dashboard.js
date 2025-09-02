@@ -3,6 +3,7 @@
     let stockChart = null;
     let stockHistoryChart = null;
     let whatIfChart = null;
+    let stockCache = { totalValue: 0, lastUpdated: 0 };
 
     Chart.register(ChartDataLabels);
 
@@ -65,26 +66,35 @@
       renderSavingsChart();
     }
 
-    async function renderSavingsChart() {
-      const yearlyIncome = getYearlyIncome();
-      const totalExpenses = currentExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-      const invest = parseFloat(investAmount.textContent.replace("$", "")) || 0;
-      const savings = yearlyIncome - totalExpenses - invest;
-
-      let stockValue = 0;
+    async function updateStockCache() {
+      let total = 0;
       for (const st of currentStocks) {
         try {
-          const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(st.symbol)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=${st.amount}`);
+          const res = await fetch(
+            `/whatIf?stockSymbol=${encodeURIComponent(st.symbol)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=${st.amount}`
+          );
           const data = await res.json();
           if (data && data.currentPrice) {
-            stockValue += Number(data.currentPrice) * Number(st.amount);
+            total += Number(data.currentPrice) * Number(st.amount);
           }
         } catch (e) {
           console.warn("Stock fetch failed for", st.symbol);
         }
       }
+      stockCache.totalValue = total;
+      stockCache.lastUpdated = Date.now();
+    }
+    function renderSavingsChart() {
+      const yearlyIncome = getYearlyIncome();
+      const totalExpenses = currentExpenses.reduce(
+        (sum, e) => sum + Number(e.amount || 0),
+        0
+      );
+      const invest =
+        parseFloat(investAmount.textContent.replace("$", "")) || 0;
+      const savings = yearlyIncome - totalExpenses - invest;
 
-      const totalInvestments = invest + stockValue;
+      const totalInvestments = invest + stockCache.totalValue;
 
       const ctx = document.getElementById("savings_plan").getContext("2d");
       if (savingsChart) savingsChart.destroy();
@@ -93,10 +103,12 @@
         type: "doughnut",
         data: {
           labels: ["Expenses", "Investments", "Savings"],
-          datasets: [{
-            data: [totalExpenses, totalInvestments, savings],
-            backgroundColor: ["#ff6384", "#85BB65", "#36a2eb"]
-          }]
+          datasets: [
+            {
+              data: [totalExpenses, totalInvestments, savings],
+              backgroundColor: ["#ff6384", "#85BB65", "#36a2eb"],
+            },
+          ],
         },
         options: {
           responsive: true,
@@ -106,11 +118,11 @@
             datalabels: {
               color: "#fff",
               font: { weight: "bold", size: 12 },
-              formatter: value => "~$" + Math.floor(value)
-            }
-          }
+              formatter: (value) => "~$" + Math.floor(value),
+            },
+          },
         },
-        plugins: [ChartDataLabels]
+        plugins: [ChartDataLabels],
       });
     }
 
@@ -552,12 +564,17 @@
 
       let sliderTimeout;
       percentSlider.addEventListener("input", function () {
-        clearTimeout(sliderTimeout);
-        sliderTimeout = setTimeout(() => {
-          updateInvestmentAmount();
-          setIncomeDisplay();
-        }, 200);
+      clearTimeout(sliderTimeout);
+      sliderTimeout = setTimeout(() => {
+        updateInvestmentAmount();
+        setIncomeDisplay();
+        renderSavingsChart();
+      }, 300);
       });
+      async function initInvestmentsSection() {
+        await updateStockCache();   
+        renderSavingsChart();     
+      }
       incomeInput.addEventListener("input", function () { updateInvestmentAmount(); setIncomeDisplay(); });
       payInterval.addEventListener("change", function () { updateInvestmentAmount(); setIncomeDisplay(); });
       searchBtn.addEventListener("click", function () { searchStock(); });
