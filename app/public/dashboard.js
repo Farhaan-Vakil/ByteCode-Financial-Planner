@@ -54,29 +54,52 @@
       incomeDisplay.textContent = "Current Income: " + yearly;
     }
 
-    function updateInvestmentAmount() {
+    async function updateInvestmentAmount() {
       const yearlyIncome = getYearlyIncome();
       const totalExpenses = currentExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-      const netIncome = yearlyIncome - totalExpenses;
       const pct = parseFloat(percentSlider.value);
-      const invest = (pct / 100) * netIncome;
+      
+      const plannedInvest = (pct / 100) * (yearlyIncome - totalExpenses);
+      
+      let stockValue = 0;
+      for (const st of currentStocks) {
+        try {
+          const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(st.symbol)}&period1=${getDateNMonthAgo(0)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=${st.amount}`);
+          const data = await res.json();
+          if (data && data.currentPrice) {
+            stockValue += Number(data.currentPrice) * Number(st.amount);
+          }
+        } catch (e) {
+          console.error("Error fetching stock price for", st.symbol, e);
+        }
+      }
+
+      const totalInvest = plannedInvest + stockValue;
+      
       investPercent.textContent = pct + "%";
-      investAmount.textContent = "$" + invest.toFixed(2);
-      renderSavingsChart();
+      investAmount.textContent = "$" + totalInvest.toFixed(2);
+
+      renderSavingsChart(totalInvest);
     }
 
-    function renderSavingsChart() {
+    function renderSavingsChart(totalInvest = null) {
       const yearlyIncome = getYearlyIncome();
       const totalExpenses = currentExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-      const invest = parseFloat(investAmount.textContent.replace("$", "")) || 0;
+      
+      const invest = totalInvest !== null ? totalInvest : parseFloat(investAmount.textContent.replace("$", "")) || 0;
       const savings = yearlyIncome - totalExpenses - invest;
+
       const ctx = document.getElementById("savings_plan").getContext("2d");
       if (savingsChart) savingsChart.destroy();
+      
       savingsChart = new Chart(ctx, {
         type: "doughnut",
         data: {
           labels: ["Expenses", "Investments", "Savings"],
-          datasets: [{ data: [totalExpenses, invest, savings], backgroundColor: ["#ff6384", "#85BB65", "#36a2eb"] }]
+          datasets: [{
+            data: [totalExpenses, invest, savings],
+            backgroundColor: ["#ff6384", "#85BB65", "#36a2eb"]
+          }]
         },
         options: {
           responsive: true,
@@ -230,27 +253,43 @@
       }
 
       async function searchStock() {
-        const sym = (stockSearch.value || "").toUpperCase();
-        if (!sym) { alert("Enter a stock symbol"); return; }
-
-        try {
-          const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(sym)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=1`);
-          const data = await res.json();
-          if (!data || !data.currentPrice) { alert("Stock not found"); return; }
-
-          stockTableBody.innerHTML =
-            `<tr>
-              <td>${sym}</td>
-              <td>${sym}</td>
-              <td>$${Number(data.currentPrice).toFixed(2)}</td>
-              <td>${(data.difference || 0).toFixed(2)}</td>
-              <td>${(data.percentChange || 0).toFixed(2)}%</td>
-            </tr>`;
-        } catch (e) {
-          console.error(e);
-          alert("Error fetching stock data");
-        }
+      const sym = (stockSearch.value || "").toUpperCase().trim();
+      if (!sym) {
+        alert("Enter a stock symbol");
+        return;
       }
+
+      try {
+        const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(sym)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=1`);
+        if (!res.ok) {
+          alert("Error fetching stock data");
+          return;
+        }
+
+        const data = await res.json();
+
+        if (!data || data.currentPrice === undefined) {
+          alert("Stock not found");
+          return;
+        }
+
+        const price = Number(data.currentPrice) || 0;
+        const difference = Number(data.difference) || 0;
+        const percentChange = Number(data.percentChange) || 0;
+
+        stockTableBody.innerHTML =
+          `<tr>
+            <td>${sym}</td>
+            <td>${sym}</td>
+            <td>$${price.toFixed(2)}</td>
+            <td>${difference.toFixed(2)}</td>
+            <td>${percentChange.toFixed(2)}%</td>
+          </tr>`;
+      } catch (e) {
+        console.error(e);
+        alert("Error fetching stock data");
+      }
+    }
 
     async function fetchStocksList() {
         try {
