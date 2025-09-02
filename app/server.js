@@ -358,49 +358,21 @@ app.get('/stock-history', async (req, res) => {
   }
 });
 
-const quoteCache = new Map(); // key -> { price, expiresAt }
-const QUOTE_TTL_MS = 10 * 1000; // cache 10s
-const MAX_RETRIES = 3;
-const RETRY_BASE_MS = 200;
-
-function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
-
-async function retryAsync(fn, name) {
-  let lastErr = null;
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastErr = err;
-      if (attempt < MAX_RETRIES) await sleep(RETRY_BASE_MS * Math.pow(2, attempt-1));
-    }
-  }
-  throw lastErr;
-}
-
-app.get('/quote', async (req, res) => {
-  const symbol = (req.query.symbol || '').toString().trim();
+app.get('/quote', requireLogin, (req, res) => {
+  const symbol = req.query.symbol;
   if (!symbol) return res.status(400).json({ message: 'symbol required' });
 
-  const key = symbol.toUpperCase();
-  const cached = quoteCache.get(key);
-  const now = Date.now();
-  if (cached && cached.expiresAt > now) {
-    return res.json({ currentPrice: cached.price, source: 'cache' });
-  }
-
-  try {
-    const q = await retryAsync(() => yahooFinance.quote(key), 'yahoo.quote');
-    const currentPrice = q?.regularMarketPrice ?? q?.currentPrice ?? null;
-    if (currentPrice == null) {
-      return res.status(502).json({ message: `No price for ${key}` });
+  finnhubClient.quote(symbol, (err, data) => {
+    if (err) {
+      console.error("Finnhub quote error for", symbol, err);
+      return res.status(500).json({ message: "failed to fetch quote", error: err.message || err });
     }
-    quoteCache.set(key, { price: Number(currentPrice), expiresAt: now + QUOTE_TTL_MS });
-    return res.json({ currentPrice: Number(currentPrice), source: 'yahoo' });
-  } catch (err) {
-    console.error('/quote error', err && err.message ? err.message : err);
-    return res.status(502).json({ message: `Failed to fetch quote for ${key}`, error: String(err) });
-  }
+    return res.json({
+      currentPrice: data.c,
+      change: data.d !== undefined ? data.d : (data.c - data.pc),
+      percentChange: data.dp !== undefined ? data.dp : null,
+    });
+  });
 });
 
 app.get("/whatIf", async (req, res) => {
@@ -408,104 +380,33 @@ app.get("/whatIf", async (req, res) => {
   if (!stockSymbol || !period1 || !period2 || !interval) {
     return res.status(400).json({ message: "Missing required query parameters" });
   }
-
-  const shareCount = Number(shares || 1);
-  const MAX_RETRIES_LOCAL = 3;
-  const RETRY_BASE_MS_LOCAL = 300;
-
-  function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-  async function retryLocal(fn, name) {
-    let lastErr = null;
-    for (let attempt = 1; attempt <= MAX_RETRIES_LOCAL; attempt++) {
-      try {
-        return await fn();
-      } catch (err) {
-        lastErr = err;
-        const msg = (err && err.message) ? err.message : String(err);
-        console.warn(`[whatIf] ${name} attempt ${attempt} failed:`, msg);
-        if (attempt < MAX_RETRIES_LOCAL) await wait(RETRY_BASE_MS_LOCAL * Math.pow(2, attempt - 1));
-      }
-    }
-    throw lastErr;
-  }
-
   try {
-    let p1 = new Date(period1);
-    let p2 = new Date(period2);
-    if (isNaN(p1) || isNaN(p2)) {
-      return res.status(400).json({ message: "Invalid date format for period1/period2. Use YYYY-MM-DD." });
-    }
-
-    if (p1.getFullYear() === p2.getFullYear() && p1.getMonth() === p2.getMonth() && p1.getDate() === p2.getDate()) {
-      p1 = new Date(p1);
-      p1.setDate(p1.getDate() - 1);
-    }
-
-    let currentPrice = null;
-    try {
-      const q = await retryLocal(() => yahooFinance.quote(stockSymbol), 'yahoo.quote');
-      currentPrice = q?.regularMarketPrice ?? q?.currentPrice ?? null;
-    } catch (quoteErr) {
-      console.warn("[whatIf] yahoo.quote ultimately failed:", quoteErr && quoteErr.message ? quoteErr.message : quoteErr);
-      currentPrice = null;
-    }
-
-    let historicalClose = null;
-    try {
-      const history = await retryLocal(() => yahooFinance.chart(stockSymbol, { period1: p1, period2: p2, interval }), 'yahoo.chart');
-      const quotes = history?.quotes || [];
-      if (quotes.length > 0 && typeof quotes[0].close === "number") {
-        historicalClose = quotes[0].close;
-      }
-    } catch (chartErr) {
-      console.warn("[whatIf] yahoo.chart ultimately failed:", chartErr && chartErr.message ? chartErr.message : chartErr);
-      historicalClose = null;
-    }
-
-    if (currentPrice != null && historicalClose == null) {
-      try {
-        const altStart = new Date(p2);
-        altStart.setMonth(altStart.getMonth() - 1);
-        const alt = await retryLocal(() => yahooFinance.chart(stockSymbol, { period1: altStart, period2: p2, interval: "1d" }), 'yahoo.chart-fallback');
-        if (alt?.quotes?.length) historicalClose = alt.quotes[0].close;
-      } catch (altErr) {
-        console.warn("[whatIf] fallback chart failed:", altErr && altErr.message ? altErr.message : altErr);
-      }
-    }
-
-    if (currentPrice == null && historicalClose == null) {
-      return res.status(503).json({
-        message: `Yahoo data temporarily unavailable for ${stockSymbol}.`,
-        note: "quote and chart attempts failed. Try again later or verify network/proxy settings."
-      });
-    }
-
-    if (historicalClose == null) {
-      return res.json({
-        historicalClose: null,
-        currentPrice: Number(currentPrice),
-        difference: 0,
-        percentChange: 0,
-        note: "No historical close found for the requested range; currentPrice returned."
-      });
-    }
-
-    const difference = (Number(currentPrice) - Number(historicalClose)) * shareCount;
-    const percentChange = historicalClose > 0 ? ((Number(currentPrice) - Number(historicalClose)) / Number(historicalClose)) * 100 : 0;
-
-    return res.json({
-      historicalClose: Number(historicalClose),
-      currentPrice: Number(currentPrice),
-      difference: Number(difference.toFixed(2)),
-      percentChange: Number(percentChange.toFixed(2))
+    const history = await yahooFinance.chart(stockSymbol, {
+      period1: period1, // start date
+      period2: period2, // end date 
+      interval: interval, // data interval
     });
+    console.log(period1, period2, interval);
 
+    const quotes = history.quotes || [];
+    if (!quotes.length) {
+      return res.status(404).json({ message: "No historical data found" });
+    }
+
+    const historicalClose = quotes[0].close;
+    const quote = await yahooFinance.quote(`${stockSymbol}`);
+    const currentPrice = quote.regularMarketPrice;
+
+    res.json({
+      historicalClose,
+      currentPrice,
+      difference: ((currentPrice - historicalClose) * shares).toFixed(2),
+      percentChange: (((currentPrice - historicalClose) / historicalClose) * 100).toFixed(2)
+    });
   } catch (err) {
-    console.error("Error in /whatIf:", err);
-    res.status(500).json({ message: "Error fetching stock data", error: err.message });
-  }
-});
+    console.error(err);
+    res.status(500).json({ message: "Error fetching stock data" });
+  }});
 
 
 app.listen(port, "0.0.0.0", () => {
