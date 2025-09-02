@@ -65,18 +65,38 @@
       renderSavingsChart();
     }
 
-    function renderSavingsChart() {
+    async function renderSavingsChart() {
       const yearlyIncome = getYearlyIncome();
       const totalExpenses = currentExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
       const invest = parseFloat(investAmount.textContent.replace("$", "")) || 0;
       const savings = yearlyIncome - totalExpenses - invest;
+
+      let stockValue = 0;
+      for (const st of currentStocks) {
+        try {
+          const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(st.symbol)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=${st.amount}`);
+          const data = await res.json();
+          if (data && data.currentPrice) {
+            stockValue += Number(data.currentPrice) * Number(st.amount);
+          }
+        } catch (e) {
+          console.warn("Stock fetch failed for", st.symbol);
+        }
+      }
+
+      const totalInvestments = invest + stockValue;
+
       const ctx = document.getElementById("savings_plan").getContext("2d");
       if (savingsChart) savingsChart.destroy();
+
       savingsChart = new Chart(ctx, {
         type: "doughnut",
         data: {
           labels: ["Expenses", "Investments", "Savings"],
-          datasets: [{ data: [totalExpenses, invest, savings], backgroundColor: ["#ff6384", "#85BB65", "#36a2eb"] }]
+          datasets: [{
+            data: [totalExpenses, totalInvestments, savings],
+            backgroundColor: ["#ff6384", "#85BB65", "#36a2eb"]
+          }]
         },
         options: {
           responsive: true,
@@ -530,7 +550,14 @@
         } catch (e) { alert("Error validating stock symbol"); }
       });
 
-      percentSlider.addEventListener("input", function () { updateInvestmentAmount(); setIncomeDisplay(); });
+      let sliderTimeout;
+      percentSlider.addEventListener("input", function () {
+        clearTimeout(sliderTimeout);
+        sliderTimeout = setTimeout(() => {
+          updateInvestmentAmount();
+          setIncomeDisplay();
+        }, 200);
+      });
       incomeInput.addEventListener("input", function () { updateInvestmentAmount(); setIncomeDisplay(); });
       payInterval.addEventListener("change", function () { updateInvestmentAmount(); setIncomeDisplay(); });
       searchBtn.addEventListener("click", function () { searchStock(); });
