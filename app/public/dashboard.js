@@ -3,8 +3,6 @@
     let stockChart = null;
     let stockHistoryChart = null;
     let whatIfChart = null;
-    let stockCache = { totalValue: 0, lastUpdated: 0 };
-    const STOCK_CACHE_TTL = 10 * 60 * 200;
 
     Chart.register(ChartDataLabels);
 
@@ -56,7 +54,7 @@
       incomeDisplay.textContent = "Current Income: " + yearly;
     }
 
-    async function updateInvestmentAmount() {
+    function updateInvestmentAmount() {
       const yearlyIncome = getYearlyIncome();
       const totalExpenses = currentExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
       const netIncome = yearlyIncome - totalExpenses;
@@ -64,57 +62,21 @@
       const invest = (pct / 100) * netIncome;
       investPercent.textContent = pct + "%";
       investAmount.textContent = "$" + invest.toFixed(2);
-
-      await updateStockCache();
       renderSavingsChart();
     }
 
-    async function updateStockCache(force = false) {
-      const now = Date.now();
-      if (!force && now - stockCache.lastUpdated < STOCK_CACHE_TTL) {
-        return; // still fresh
-      }
-
-       try {
-        const res = await fetch("/stocks-summary", { credentials: "include" });
-        const data = await res.json();
-        stockCache.totalValue = data.reduce((sum, s) => sum + (s.currentPrice * s.shares), 0);
-        stockCache.lastUpdated = now;
-      } catch (e) {
-        console.warn("Failed to fetch stock summary", e);
-        stockCache.totalValue = 0;
-      }
-
-      stockCache.totalValue = total;
-      stockCache.lastUpdated = now;
-    }
-
-    // --- Render chart (instant, no server calls) ---
     function renderSavingsChart() {
       const yearlyIncome = getYearlyIncome();
-      const totalExpenses = currentExpenses.reduce(
-        (sum, e) => sum + Number(e.amount || 0),
-        0
-      );
-      const invest =
-        parseFloat(investAmount.textContent.replace("$", "")) || 0;
+      const totalExpenses = currentExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      const invest = parseFloat(investAmount.textContent.replace("$", "")) || 0;
       const savings = yearlyIncome - totalExpenses - invest;
-
-      const totalInvestments = invest + stockCache.totalValue;
-
       const ctx = document.getElementById("savings_plan").getContext("2d");
       if (savingsChart) savingsChart.destroy();
-
       savingsChart = new Chart(ctx, {
         type: "doughnut",
         data: {
           labels: ["Expenses", "Investments", "Savings"],
-          datasets: [
-            {
-              data: [totalExpenses, totalInvestments, savings],
-              backgroundColor: ["#ff6384", "#85BB65", "#36a2eb"],
-            },
-          ],
+          datasets: [{ data: [totalExpenses, invest, savings], backgroundColor: ["#ff6384", "#85BB65", "#36a2eb"] }]
         },
         options: {
           responsive: true,
@@ -124,11 +86,11 @@
             datalabels: {
               color: "#fff",
               font: { weight: "bold", size: 12 },
-              formatter: (value) => "~$" + Math.floor(value),
-            },
-          },
+              formatter: value => "~$" + Math.floor(value)
+            }
+          }
         },
-        plugins: [ChartDataLabels],
+        plugins: [ChartDataLabels]
       });
     }
 
@@ -395,9 +357,12 @@
 
 
       function getDateNMonthAgo(n) {
-         const d = new Date();
-          d.setMonth(d.getMonth() - n);
-          return Math.floor(d.getTime() / 1000);
+        const d = new Date();
+        d.setMonth(d.getMonth() - n);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return year + "-" + month + "-" + day;
       }
 
       async function runWhatIf(symbol, months, shares) {
@@ -565,23 +530,7 @@
         } catch (e) { alert("Error validating stock symbol"); }
       });
 
-      percentSlider.addEventListener("input", function () {
-        clearTimeout(sliderTimeout);
-        sliderTimeout = setTimeout(() => {
-          updateInvestmentAmount();
-          setIncomeDisplay();
-          renderSavingsChart();
-        }, 300);
-      });
-      async function initInvestmentsSection() {
-        await updateStockCache(true);
-        renderSavingsChart();
-
-        setInterval(async () => {
-          await updateStockCache(true);
-          renderSavingsChart();
-        }, STOCK_CACHE_TTL);
-      }
+      percentSlider.addEventListener("input", function () { updateInvestmentAmount(); setIncomeDisplay(); });
       incomeInput.addEventListener("input", function () { updateInvestmentAmount(); setIncomeDisplay(); });
       payInterval.addEventListener("change", function () { updateInvestmentAmount(); setIncomeDisplay(); });
       searchBtn.addEventListener("click", function () { searchStock(); });
