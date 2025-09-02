@@ -358,6 +358,33 @@ app.get('/stock-history', async (req, res) => {
   }
 });
 
+app.get("/stocks-summary", requireLogin, async (req, res) => {
+  try {
+    const email = req.session.user.email;
+    const userRes = await pool.query("SELECT budgets FROM accounts WHERE email = $1", [email]);
+    let budgets = userRes.rows.length ? userRes.rows[0].budgets : [];
+    if (!budgets.length) return res.json([]);
+
+    const latest = budgets[budgets.length - 1];
+    const stocks = latest.stocks || [];
+
+    const results = [];
+    for (const st of stocks) {
+      try {
+        const quote = await yahooFinance.quote(st.symbol);
+        results.push({ symbol: st.symbol, currentPrice: quote.regularMarketPrice, shares: st.amount });
+      } catch (e) {
+        console.error("Stock fetch failed:", st.symbol, e.message);
+      }
+    }
+    res.json(results);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
 app.get("/whatIf", async (req, res) => {
   try {
     let { stockSymbol, period1, period2, interval, shares } = req.query;

@@ -56,7 +56,7 @@
       incomeDisplay.textContent = "Current Income: " + yearly;
     }
 
-    function updateInvestmentAmount() {
+    async function updateInvestmentAmount() {
       const yearlyIncome = getYearlyIncome();
       const totalExpenses = currentExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
       const netIncome = yearlyIncome - totalExpenses;
@@ -64,6 +64,8 @@
       const invest = (pct / 100) * netIncome;
       investPercent.textContent = pct + "%";
       investAmount.textContent = "$" + invest.toFixed(2);
+
+      await updateStockCache();
       renderSavingsChart();
     }
 
@@ -73,23 +75,14 @@
         return; // still fresh
       }
 
-      let total = 0;
-      for (const st of currentStocks) {
-        try {
-          const res = await fetch(
-            `/whatIf?stockSymbol=${encodeURIComponent(
-              st.symbol
-            )}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(
-              0
-            )}&interval=1d&shares=${st.amount}`
-          );
-          const data = await res.json();
-          if (data && data.currentPrice) {
-            total += Number(data.currentPrice) * Number(st.amount);
-          }
-        } catch (e) {
-          console.warn("Stock fetch failed for", st.symbol);
-        }
+       try {
+        const res = await fetch("/stocks-summary", { credentials: "include" });
+        const data = await res.json();
+        stockCache.totalValue = data.reduce((sum, s) => sum + (s.currentPrice * s.shares), 0);
+        stockCache.lastUpdated = now;
+      } catch (e) {
+        console.warn("Failed to fetch stock summary", e);
+        stockCache.totalValue = 0;
       }
 
       stockCache.totalValue = total;
@@ -581,11 +574,11 @@
         }, 300);
       });
       async function initInvestmentsSection() {
-        await updateStockCache();
+        await updateStockCache(true);
         renderSavingsChart();
 
         setInterval(async () => {
-          await updateStockCache();
+          await updateStockCache(true);
           renderSavingsChart();
         }, STOCK_CACHE_TTL);
       }
