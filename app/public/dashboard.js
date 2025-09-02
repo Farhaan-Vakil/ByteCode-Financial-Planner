@@ -54,66 +54,49 @@
       incomeDisplay.textContent = "Current Income: " + yearly;
     }
 
-    async function fetchQuoteFor(symbol) {
-      try {
-        const yahooSym = (symbol || "").replace(".", "-").toUpperCase();
-        const res = await fetch(`/quote?symbol=${encodeURIComponent(yahooSym)}`, { credentials: "include" });
-        if (!res.ok) throw new Error("quote failed: " + res.status);
-        const data = await res.json();
-        return {
-          currentPrice: Number(data.currentPrice || data.c || 0),
-          change: (data.change !== undefined) ? Number(data.change) : Number(data.d || 0),
-          percentChange: (data.percentChange !== undefined) ? Number(data.percentChange) : Number(data.dp || 0)
-        };
-      } catch (e) {
-        console.warn("fetchQuoteFor error", symbol, e);
-        return { currentPrice: 0, change: 0, percentChange: 0 };
-      }
-    }
-
-    async function updateInvestmentAmount() {
+    function updateInvestmentAmount() {
       const yearlyIncome = getYearlyIncome();
       const totalExpenses = currentExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      const netIncome = yearlyIncome - totalExpenses;
       const pct = parseFloat(percentSlider.value);
-      const investFromPct = (pct / 100) * (yearlyIncome - totalExpenses);
-
-      let totalStockValue = 0;
-      if (Array.isArray(currentStocks) && currentStocks.length) {
-        const quotePromises = currentStocks.map(s => fetchQuoteFor(s.symbol));
-        const quotes = await Promise.all(quotePromises);
-        quotes.forEach((q, idx) => {
-          const shares = Number(currentStocks[idx].amount || 0);
-          if (shares && q.currentPrice) totalStockValue += q.currentPrice * shares;
-        });
-      }
-
-      const invest = investFromPct + totalStockValue;
-
+      const invest = (pct / 100) * netIncome;
       investPercent.textContent = pct + "%";
       investAmount.textContent = "$" + invest.toFixed(2);
-
-      await renderSavingsChart(invest, totalStockValue);
+      renderSavingsChart();
     }
 
-    async function renderSavingsChart(totalInvestments = 0, stockValue = 0) {
+    async function renderSavingsChart() {
       const yearlyIncome = getYearlyIncome();
       const totalExpenses = currentExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-      const savings = Math.max(0, yearlyIncome - totalExpenses - totalInvestments);
+      const invest = parseFloat(investAmount.textContent.replace("$", "")) || 0;
+      const savings = yearlyIncome - totalExpenses - invest;
+
+      let stockValue = 0;
+      for (const st of currentStocks) {
+        try {
+          const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(st.symbol)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=${st.amount}`);
+          const data = await res.json();
+          if (data && data.currentPrice) {
+            stockValue += Number(data.currentPrice) * Number(st.amount);
+          }
+        } catch (e) {
+          console.warn("Stock fetch failed for", st.symbol);
+        }
+      }
+
+      const totalInvestments = invest + stockValue;
 
       const ctx = document.getElementById("savings_plan").getContext("2d");
       if (savingsChart) savingsChart.destroy();
 
-      // break out investments into "Investments (stocks)" and "Other investments"
-      const otherInvest = Math.max(0, totalInvestments - stockValue);
-
-      const labels = ["Expenses", "Investments (Other)", "Investments (Stocks)", "Savings"];
-      const dataValues = [totalExpenses, otherInvest, stockValue, savings];
-
       savingsChart = new Chart(ctx, {
         type: "doughnut",
         data: {
-          labels,
-          datasets: [{ data: dataValues, backgroundColor: ["#ff6384", "#85BB65", "#4CAF50", "#36a2eb"] }]
+          labels: ["Expenses", "Investments", "Savings"],
+          datasets: [{
+            data: [totalExpenses, totalInvestments, savings],
+            backgroundColor: ["#ff6384", "#85BB65", "#36a2eb"]
+          }]
         },
         options: {
           responsive: true,
@@ -124,14 +107,6 @@
               color: "#fff",
               font: { weight: "bold", size: 12 },
               formatter: value => "~$" + Math.floor(value)
-            },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  const v = context.parsed;
-                  return context.label + ": $" + v.toFixed(2);
-                }
-              }
             }
           }
         },
@@ -167,49 +142,52 @@
       }
 
       async function renderStocks(stocks) {
-      stocksBody.innerHTML = "";
-      stockList.innerHTML = "";
+        stocksBody.innerHTML = "";
+        stockList.innerHTML = "";
 
-      for (const st of stocks) {
-        const symbol = st.symbol;
-        if (!symbol || !st.amount) continue;
+        for (const st of stocks) {
+          const symbol = st.symbol;
+          if (!symbol || !st.amount) continue;
 
-        try {
-          const quote = await fetchQuoteFor(symbol);
-          const price = Number(quote.currentPrice || 0);
-          const total = (price * Number(st.amount)).toFixed(2);
+          try {
+            const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(symbol)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=${st.amount}`);
+            const data = await res.json();
+            if (!data || !data.currentPrice) continue;
 
-          const tr = document.createElement("tr");
-          tr.innerHTML =
-            `<td><a href="stockNews.html?stockSymbol=${symbol}">${symbol}</a></td>` +
-            `<td>${st.amount}</td>` +
-            `<td>$${price.toFixed(2)}</td>` +
-            `<td>$${total}</td>` +
-            '<td><button class="btn delete-btn">Delete</button></td>';
+            const price = Number(data.currentPrice);
+            const total = (price * Number(st.amount)).toFixed(2);
 
-          const btn = tr.querySelector(".delete-btn");
-          btn.addEventListener("click", async () => {
-            const resDel = await fetch("/delete-stock", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              credentials: "include",
-              body: JSON.stringify({ symbol }) // email removed
+            const tr = document.createElement("tr");
+            tr.innerHTML =
+              `<td><a href="stockNews.html?stockSymbol=${symbol}">${symbol}</a></td>` +
+              `<td>${st.amount}</td>` +
+              `<td>$${price.toFixed(2)}</td>` +
+              `<td>$${total}</td>` +
+              '<td><button class="btn delete-btn">Delete</button></td>';
+
+            const btn = tr.querySelector(".delete-btn");
+            btn.addEventListener("click", async () => {
+              const resDel = await fetch("/delete-stock", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ symbol }) // email removed
+              });
+              if (resDel.ok) await loadDashboard();
+              else alert("Error deleting stock");
             });
-            if (resDel.ok) await loadDashboard();
-            else alert("Error deleting stock");
-          });
 
-          stocksBody.appendChild(tr);
+            stocksBody.appendChild(tr);
 
-          const opt = document.createElement("option");
-          opt.value = symbol;
-          stockList.appendChild(opt);
+            const opt = document.createElement("option");
+            opt.value = symbol;
+            stockList.appendChild(opt);
 
-        } catch (e) {
-          console.error(`Failed to load stock ${symbol}`, e);
+          } catch (e) {
+            console.error(`Failed to load stock ${symbol}`, e);
+          }
         }
       }
-    }
 
       async function loadStockPerformance(stocks) {
         const ctx = document.getElementById("stock_performance").getContext("2d");
@@ -218,13 +196,13 @@
 
         for (const st of stocks) {
           try {
-            const quote = await fetchQuoteFor(st.symbol);
-            if (!quote || !quote.currentPrice) continue;
+            const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(st.symbol)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=${st.amount}`);
+            const data = await res.json();
+            if (!data || !data.currentPrice) continue;
+
             labels.push(st.symbol);
-            values.push(Math.floor(Number(quote.currentPrice) * Number(st.amount)));
-          } catch (e) {
-            console.warn("loadStockPerformance error", st.symbol, e);
-          }
+            values.push(Math.floor(Number(data.currentPrice) * Number(st.amount)));
+          } catch (e) {}
         }
 
         if (stockChart) stockChart.destroy();
@@ -272,30 +250,27 @@
       }
 
       async function searchStock() {
-      const raw = (stockSearch.value || "").trim();
-      const sym = raw.toUpperCase();
-      if (!sym) { alert("Enter a stock symbol"); return; }
+        const sym = (stockSearch.value || "").toUpperCase();
+        if (!sym) { alert("Enter a stock symbol"); return; }
 
-      try {
-        const data = await fetchQuoteFor(sym);
-        if (!data || !data.currentPrice || data.currentPrice === 0) {
-          alert("Stock not found or no quote available");
-          return;
+        try {
+          const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(sym)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=1`);
+          const data = await res.json();
+          if (!data || !data.currentPrice) { alert("Stock not found"); return; }
+
+          stockTableBody.innerHTML =
+            `<tr>
+              <td>${sym}</td>
+              <td>${sym}</td>
+              <td>$${Number(data.currentPrice).toFixed(2)}</td>
+              <td>${(data.difference || 0).toFixed(2)}</td>
+              <td>${(data.percentChange || 0).toFixed(2)}%</td>
+            </tr>`;
+        } catch (e) {
+          console.error(e);
+          alert("Error fetching stock data");
         }
-
-        stockTableBody.innerHTML =
-          `<tr>
-            <td>${sym}</td>
-            <td>${sym}</td>
-            <td>$${Number(data.currentPrice).toFixed(2)}</td>
-            <td>${(data.change || 0).toFixed(2)}</td>
-            <td>${(data.percentChange || 0).toFixed(2)}%</td>
-          </tr>`;
-      } catch (e) {
-        console.error(e);
-        alert("Error fetching stock data");
       }
-    }
 
     async function fetchStocksList() {
         try {
@@ -575,7 +550,14 @@
         } catch (e) { alert("Error validating stock symbol"); }
       });
 
-      percentSlider.addEventListener("input", function () { updateInvestmentAmount(); setIncomeDisplay(); });
+      let sliderTimeout;
+      percentSlider.addEventListener("input", function () {
+        clearTimeout(sliderTimeout);
+        sliderTimeout = setTimeout(() => {
+          updateInvestmentAmount();
+          setIncomeDisplay();
+        }, 200);
+      });
       incomeInput.addEventListener("input", function () { updateInvestmentAmount(); setIncomeDisplay(); });
       payInterval.addEventListener("change", function () { updateInvestmentAmount(); setIncomeDisplay(); });
       searchBtn.addEventListener("click", function () { searchStock(); });

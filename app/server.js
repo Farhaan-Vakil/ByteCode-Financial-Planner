@@ -358,23 +358,6 @@ app.get('/stock-history', async (req, res) => {
   }
 });
 
-app.get('/quote', requireLogin, (req, res) => {
-  const symbol = req.query.symbol;
-  if (!symbol) return res.status(400).json({ message: 'symbol required' });
-
-  finnhubClient.quote(symbol, (err, data) => {
-    if (err) {
-      console.error("Finnhub quote error for", symbol, err);
-      return res.status(500).json({ message: "failed to fetch quote", error: err.message || err });
-    }
-    return res.json({
-      currentPrice: data.c,
-      change: data.d !== undefined ? data.d : (data.c - data.pc),
-      percentChange: data.dp !== undefined ? data.dp : null,
-    });
-  });
-});
-
 app.get("/whatIf", async (req, res) => {
   const { stockSymbol, period1, period2, interval, shares } = req.query;
   if (!stockSymbol || !period1 || !period2 || !interval) {
