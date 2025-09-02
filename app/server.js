@@ -358,6 +358,51 @@ app.get('/stock-history', async (req, res) => {
   }
 });
 
+const quoteCache = new Map(); // key -> { price, expiresAt }
+const QUOTE_TTL_MS = 10 * 1000; // cache 10s
+const MAX_RETRIES = 3;
+const RETRY_BASE_MS = 200;
+
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+async function retryAsync(fn, name) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < MAX_RETRIES) await sleep(RETRY_BASE_MS * Math.pow(2, attempt-1));
+    }
+  }
+  throw lastErr;
+}
+
+app.get('/quote', async (req, res) => {
+  const symbol = (req.query.symbol || '').toString().trim();
+  if (!symbol) return res.status(400).json({ message: 'symbol required' });
+
+  const key = symbol.toUpperCase();
+  const cached = quoteCache.get(key);
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) {
+    return res.json({ currentPrice: cached.price, source: 'cache' });
+  }
+
+  try {
+    const q = await retryAsync(() => yahooFinance.quote(key), 'yahoo.quote');
+    const currentPrice = q?.regularMarketPrice ?? q?.currentPrice ?? null;
+    if (currentPrice == null) {
+      return res.status(502).json({ message: `No price for ${key}` });
+    }
+    quoteCache.set(key, { price: Number(currentPrice), expiresAt: now + QUOTE_TTL_MS });
+    return res.json({ currentPrice: Number(currentPrice), source: 'yahoo' });
+  } catch (err) {
+    console.error('/quote error', err && err.message ? err.message : err);
+    return res.status(502).json({ message: `Failed to fetch quote for ${key}`, error: String(err) });
+  }
+});
+
 app.get("/whatIf", async (req, res) => {
   const { stockSymbol, period1, period2, interval, shares } = req.query;
   if (!stockSymbol || !period1 || !period2 || !interval) {
@@ -365,25 +410,21 @@ app.get("/whatIf", async (req, res) => {
   }
 
   const shareCount = Number(shares || 1);
-  const MAX_RETRIES = 3;
-  const RETRY_BASE_MS = 300;
+  const MAX_RETRIES_LOCAL = 3;
+  const RETRY_BASE_MS_LOCAL = 300;
 
-  function wait(ms) {
-    return new Promise(r => setTimeout(r, ms));
-  }
+  function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  async function retryAsync(fn, name) {
+  async function retryLocal(fn, name) {
     let lastErr = null;
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    for (let attempt = 1; attempt <= MAX_RETRIES_LOCAL; attempt++) {
       try {
         return await fn();
       } catch (err) {
         lastErr = err;
         const msg = (err && err.message) ? err.message : String(err);
         console.warn(`[whatIf] ${name} attempt ${attempt} failed:`, msg);
-        if (attempt < MAX_RETRIES) {
-          await wait(RETRY_BASE_MS * Math.pow(2, attempt - 1));
-        }
+        if (attempt < MAX_RETRIES_LOCAL) await wait(RETRY_BASE_MS_LOCAL * Math.pow(2, attempt - 1));
       }
     }
     throw lastErr;
@@ -403,7 +444,7 @@ app.get("/whatIf", async (req, res) => {
 
     let currentPrice = null;
     try {
-      const q = await retryAsync(() => yahooFinance.quote(stockSymbol), 'yahoo.quote');
+      const q = await retryLocal(() => yahooFinance.quote(stockSymbol), 'yahoo.quote');
       currentPrice = q?.regularMarketPrice ?? q?.currentPrice ?? null;
     } catch (quoteErr) {
       console.warn("[whatIf] yahoo.quote ultimately failed:", quoteErr && quoteErr.message ? quoteErr.message : quoteErr);
@@ -412,7 +453,7 @@ app.get("/whatIf", async (req, res) => {
 
     let historicalClose = null;
     try {
-      const history = await retryAsync(() => yahooFinance.chart(stockSymbol, { period1: p1, period2: p2, interval }), 'yahoo.chart');
+      const history = await retryLocal(() => yahooFinance.chart(stockSymbol, { period1: p1, period2: p2, interval }), 'yahoo.chart');
       const quotes = history?.quotes || [];
       if (quotes.length > 0 && typeof quotes[0].close === "number") {
         historicalClose = quotes[0].close;
@@ -426,7 +467,7 @@ app.get("/whatIf", async (req, res) => {
       try {
         const altStart = new Date(p2);
         altStart.setMonth(altStart.getMonth() - 1);
-        const alt = await retryAsync(() => yahooFinance.chart(stockSymbol, { period1: altStart, period2: p2, interval: "1d" }), 'yahoo.chart-fallback');
+        const alt = await retryLocal(() => yahooFinance.chart(stockSymbol, { period1: altStart, period2: p2, interval: "1d" }), 'yahoo.chart-fallback');
         if (alt?.quotes?.length) historicalClose = alt.quotes[0].close;
       } catch (altErr) {
         console.warn("[whatIf] fallback chart failed:", altErr && altErr.message ? altErr.message : altErr);
@@ -459,12 +500,12 @@ app.get("/whatIf", async (req, res) => {
       difference: Number(difference.toFixed(2)),
       percentChange: Number(percentChange.toFixed(2))
     });
+
   } catch (err) {
-    console.error("[whatIf] unexpected error:", err && err.message ? err.message : err);
-    return res.status(500).json({ message: "Unexpected server error in /whatIf", error: String(err) });
+    console.error("Error in /whatIf:", err);
+    res.status(500).json({ message: "Error fetching stock data", error: err.message });
   }
 });
-
 
 
 app.listen(port, "0.0.0.0", () => {
