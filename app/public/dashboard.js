@@ -251,20 +251,30 @@
 
       async function searchStock() {
         const sym = (stockSearch.value || "").toUpperCase();
-        if (!sym) { alert("Enter a stock symbol"); return; }
+        if (!sym) { 
+          alert("Enter a stock symbol"); 
+          return; 
+        }
 
         try {
           const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(sym)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=1`);
           const data = await res.json();
-          if (!data || !data.currentPrice) { alert("Stock not found"); return; }
+          if (!data || !data.currentPrice) { 
+            alert("Stock not found"); 
+            return; 
+          }
 
-          stockTableBody.innerHTML =
-            `<tr>
+          const price = Number(data.currentPrice || 0);
+          const difference = Number(data.difference || 0);
+          const percentChange = Number(data.percentChange || 0);
+
+          stockTableBody.innerHTML = `
+            <tr>
               <td>${sym}</td>
               <td>${sym}</td>
-              <td>$${Number(data.currentPrice).toFixed(2)}</td>
-              <td>${(data.difference || 0).toFixed(2)}</td>
-              <td>${(data.percentChange || 0).toFixed(2)}%</td>
+              <td>$${price.toFixed(2)}</td>
+              <td>$${difference.toFixed(2)}</td>
+              <td>${percentChange.toFixed(2)}%</td>
             </tr>`;
         } catch (e) {
           console.error(e);
@@ -549,6 +559,19 @@
           await loadDashboard();
         } catch (e) { alert("Error validating stock symbol"); }
       });
+      let sliderTimeout = null;
+
+      percentSlider.addEventListener("input", function () {
+        investPercent.textContent = percentSlider.value + "%";
+
+        if (sliderTimeout) clearTimeout(sliderTimeout);
+
+        sliderTimeout = setTimeout(() => {
+          updateInvestmentAmount();
+          sliderTimeout = null;
+        }, 200); 
+      });
+
 
       incomeInput.addEventListener("input", function () { updateInvestmentAmount(); setIncomeDisplay(); });
       payInterval.addEventListener("change", function () { updateInvestmentAmount(); setIncomeDisplay(); });
@@ -583,5 +606,4 @@
           alert("What-if failed");
         }
       });
-
       document.addEventListener("DOMContentLoaded", function () { loadDashboard(); });
