@@ -359,25 +359,27 @@ app.get('/stock-history', async (req, res) => {
 });
 
 app.get("/whatIf", async (req, res) => {
-  const { stockSymbol, period1, period2, interval, shares } = req.query;
-  if (!stockSymbol || !period1 || !period2 || !interval) {
-    return res.status(400).json({ message: "Missing required query parameters" });
-  }
   try {
-    const history = await yahooFinance.chart(stockSymbol, {
-      period1: period1, // start date
-      period2: period2, // end date 
-      interval: interval, // data interval
-    });
-    console.log(period1, period2, interval);
+    let { stockSymbol, period1, period2, interval, shares } = req.query;
+    shares = Number(shares) || 1;
 
-    const quotes = history.quotes || [];
+    // Ensure timestamps
+    const p1 = new Date(Number(period1) * 1000);
+    const p2 = new Date(Number(period2) * 1000);
+
+    const history = await yahooFinance.chart(stockSymbol, {
+      period1: p1,
+      period2: p2,
+      interval: interval || "1d",
+    });
+
+    const quotes = history?.quotes || [];
     if (!quotes.length) {
       return res.status(404).json({ message: "No historical data found" });
     }
 
     const historicalClose = quotes[0].close;
-    const quote = await yahooFinance.quote(`${stockSymbol}`);
+    const quote = await yahooFinance.quote(stockSymbol);
     const currentPrice = quote.regularMarketPrice;
 
     res.json({
@@ -387,9 +389,10 @@ app.get("/whatIf", async (req, res) => {
       percentChange: (((currentPrice - historicalClose) / historicalClose) * 100).toFixed(2)
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error fetching stock data" });
-  }});
+    console.error("Error in /whatIf:", err);
+    res.status(500).json({ message: "Error fetching stock data", error: err.message });
+  }
+});
 
 
 app.listen(port, "0.0.0.0", () => {

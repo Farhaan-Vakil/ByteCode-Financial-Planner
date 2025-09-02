@@ -4,6 +4,7 @@
     let stockHistoryChart = null;
     let whatIfChart = null;
     let stockCache = { totalValue: 0, lastUpdated: 0 };
+    const STOCK_CACHE_TTL = 10 * 60 * 200;
 
     Chart.register(ChartDataLabels);
 
@@ -66,12 +67,21 @@
       renderSavingsChart();
     }
 
-    async function updateStockCache() {
+    async function updateStockCache(force = false) {
+      const now = Date.now();
+      if (!force && now - stockCache.lastUpdated < STOCK_CACHE_TTL) {
+        return; // still fresh
+      }
+
       let total = 0;
       for (const st of currentStocks) {
         try {
           const res = await fetch(
-            `/whatIf?stockSymbol=${encodeURIComponent(st.symbol)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=${st.amount}`
+            `/whatIf?stockSymbol=${encodeURIComponent(
+              st.symbol
+            )}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(
+              0
+            )}&interval=1d&shares=${st.amount}`
           );
           const data = await res.json();
           if (data && data.currentPrice) {
@@ -81,9 +91,12 @@
           console.warn("Stock fetch failed for", st.symbol);
         }
       }
+
       stockCache.totalValue = total;
-      stockCache.lastUpdated = Date.now();
+      stockCache.lastUpdated = now;
     }
+
+    // --- Render chart (instant, no server calls) ---
     function renderSavingsChart() {
       const yearlyIncome = getYearlyIncome();
       const totalExpenses = currentExpenses.reduce(
@@ -389,12 +402,9 @@
 
 
       function getDateNMonthAgo(n) {
-        const d = new Date();
-        d.setMonth(d.getMonth() - n);
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        return year + "-" + month + "-" + day;
+         const d = new Date();
+          d.setMonth(d.getMonth() - n);
+          return Math.floor(d.getTime() / 1000);
       }
 
       async function runWhatIf(symbol, months, shares) {
@@ -562,18 +572,22 @@
         } catch (e) { alert("Error validating stock symbol"); }
       });
 
-      let sliderTimeout;
       percentSlider.addEventListener("input", function () {
-      clearTimeout(sliderTimeout);
-      sliderTimeout = setTimeout(() => {
-        updateInvestmentAmount();
-        setIncomeDisplay();
-        renderSavingsChart();
-      }, 300);
+        clearTimeout(sliderTimeout);
+        sliderTimeout = setTimeout(() => {
+          updateInvestmentAmount();
+          setIncomeDisplay();
+          renderSavingsChart();
+        }, 300);
       });
       async function initInvestmentsSection() {
-        await updateStockCache();   
-        renderSavingsChart();     
+        await updateStockCache();
+        renderSavingsChart();
+
+        setInterval(async () => {
+          await updateStockCache();
+          renderSavingsChart();
+        }, STOCK_CACHE_TTL);
       }
       incomeInput.addEventListener("input", function () { updateInvestmentAmount(); setIncomeDisplay(); });
       payInterval.addEventListener("change", function () { updateInvestmentAmount(); setIncomeDisplay(); });
