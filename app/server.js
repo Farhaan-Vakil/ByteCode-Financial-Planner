@@ -360,49 +360,106 @@ app.get('/stock-history', async (req, res) => {
 
 app.get("/whatIf", async (req, res) => {
   const { stockSymbol, period1, period2, interval, shares } = req.query;
-  if (!stockSymbol || !period1 || !period2 || !interval || !shares) {
+  if (!stockSymbol || !period1 || !period2 || !interval) {
     return res.status(400).json({ message: "Missing required query parameters" });
   }
 
-  const today = new Date();
-  const endDate = new Date(period2);
-  const startDate = new Date(period1);
-
-  // Prevent future dates
-  if (endDate > today) endDate.setTime(today.getTime());
-  if (startDate > today) startDate.setTime(today.getTime());
+  const shareCount = Number(shares || 1);
 
   try {
-    const history = await yahooFinance.chart(stockSymbol, {
-      period1: startDate,
-      period2: endDate,
-      interval,
-    });
+    let p1 = new Date(period1);
+    let p2 = new Date(period2);
 
-    const quotes = history.quotes || [];
-    if (quotes.length === 0) {
-      return res.status(404).json({ message: "No historical data found for this period" });
+    if (isNaN(p1) || isNaN(p2)) {
+      return res.status(400).json({ message: "Invalid date format for period1/period2. Use YYYY-MM-DD." });
     }
 
-    const historicalClose = quotes[0].close || 0;
-    const quote = await yahooFinance.quote(stockSymbol);
-    const currentPrice = quote.regularMarketPrice || 0;
+    if (
+      p1.getFullYear() === p2.getFullYear() &&
+      p1.getMonth() === p2.getMonth() &&
+      p1.getDate() === p2.getDate()
+    ) {
+      p1 = new Date(p1);
+      p1.setDate(p1.getDate() - 1);
+    }
 
-    const diff = (currentPrice - historicalClose) * Number(shares);
-    const pct = historicalClose > 0 ? ((currentPrice - historicalClose) / historicalClose) * 100 : 0;
+    let history;
+    try {
+      history = await yahooFinance.chart(stockSymbol, {
+        period1: p1,
+        period2: p2,
+        interval: interval,
+      });
+    } catch (chartErr) {
+      console.warn("yahooFinance.chart error (will try fallback):", chartErr.message || chartErr);
+      history = null;
+    }
+
+    const quotes = history?.quotes || [];
+    let historicalClose = null;
+
+    if (quotes.length > 0 && typeof quotes[0].close === "number") {
+      historicalClose = quotes[0].close;
+    } else {
+      const altStart = new Date(p2);
+      altStart.setMonth(altStart.getMonth() - 1);
+      try {
+        const alt = await yahooFinance.chart(stockSymbol, { period1: altStart, period2: p2, interval: "1d" });
+        if (alt?.quotes?.length) historicalClose = alt.quotes[0].close;
+      } catch (altErr) {
+        console.warn("Fallback chart attempt failed:", altErr.message || altErr);
+      }
+    }
+
+    let quote = null;
+    try {
+      quote = await yahooFinance.quote(stockSymbol);
+    } catch (qErr) {
+      console.warn("yahooFinance.quote failed:", qErr.message || qErr);
+    }
+
+    const currentPrice = quote?.regularMarketPrice ?? quote?.currentPrice ?? null;
+
+    if (historicalClose === null) {
+      try {
+        const hist = await yahooFinance.chart(stockSymbol, {
+          period1: new Date(p2.getFullYear() - 1, p2.getMonth(), p2.getDate()), // ~1 year back
+          period2: p2,
+          interval: "1mo",
+        });
+        if (hist?.quotes?.length) historicalClose = hist.quotes[0].close;
+      } catch (finalErr) {
+        console.warn("Final historical fallback failed:", finalErr.message || finalErr);
+      }
+    }
+
+    if (currentPrice == null) {
+      return res.status(404).json({ message: "Could not fetch current price for symbol " + stockSymbol });
+    }
+    if (historicalClose == null) {
+      return res.json({
+        historicalClose: null,
+        currentPrice,
+        difference: 0,
+        percentChange: 0,
+        note: "No historical close found for the requested range; currentPrice returned."
+      });
+    }
+
+    const difference = (currentPrice - historicalClose) * shareCount;
+    const percentChange = historicalClose > 0 ? ((currentPrice - historicalClose) / historicalClose) * 100 : 0;
 
     res.json({
-      historicalClose,
-      currentPrice,
-      difference: diff.toFixed(2),
-      percentChange: pct.toFixed(2)
+      historicalClose: Number(historicalClose),
+      currentPrice: Number(currentPrice),
+      difference: Number(difference.toFixed(2)),
+      percentChange: Number(percentChange.toFixed(2)),
     });
   } catch (err) {
-    console.error("whatIf error:", err);
+    console.error("Error in /whatIf:", err);
     res.status(500).json({ message: "Error fetching stock data", error: err.message });
   }
 });
-
 
 
 app.listen(port, "0.0.0.0", () => {

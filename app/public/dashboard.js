@@ -398,6 +398,7 @@
       function getDateNMonthAgo(n) {
         const d = new Date();
         d.setMonth(d.getMonth() - n);
+        // Ensure date is not in future
         const today = new Date();
         if (d > today) d.setTime(today.getTime());
         const year = d.getFullYear();
