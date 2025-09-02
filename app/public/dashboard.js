@@ -253,42 +253,42 @@
       }
 
       async function searchStock() {
-      const sym = (stockSearch.value || "").toUpperCase().trim();
-      if (!sym) {
-        alert("Enter a stock symbol");
-        return;
-      }
+        const sym = (stockSearch.value || "").toUpperCase().trim();
+        if (!sym) {
+          alert("Enter a stock symbol");
+          return;
+        }
 
-      try {
-        const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(sym)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=1`);
-        if (!res.ok) {
+        try {
+          const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(sym)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=1`);
+          if (!res.ok) {
+            alert("Error fetching stock data");
+            return;
+          }
+
+          const data = await res.json();
+
+          if (!data || data.currentPrice === undefined) {
+            alert("Stock not found");
+            return;
+          }
+
+          const price = Number(data.currentPrice) || 0;
+          const difference = Number(data.difference) || 0;
+          const percentChange = Number(data.percentChange) || 0;
+
+          stockTableBody.innerHTML =
+            `<tr>
+              <td>${sym}</td>
+              <td>${sym}</td>
+              <td>$${price.toFixed(2)}</td>
+              <td>${difference.toFixed(2)}</td>
+              <td>${percentChange.toFixed(2)}%</td>
+            </tr>`;
+        } catch (e) {
+          console.error(e);
           alert("Error fetching stock data");
-          return;
         }
-
-        const data = await res.json();
-
-        if (!data || data.currentPrice === undefined) {
-          alert("Stock not found");
-          return;
-        }
-
-        const price = Number(data.currentPrice) || 0;
-        const difference = Number(data.difference) || 0;
-        const percentChange = Number(data.percentChange) || 0;
-
-        stockTableBody.innerHTML =
-          `<tr>
-            <td>${sym}</td>
-            <td>${sym}</td>
-            <td>$${price.toFixed(2)}</td>
-            <td>${difference.toFixed(2)}</td>
-            <td>${percentChange.toFixed(2)}%</td>
-          </tr>`;
-      } catch (e) {
-        console.error(e);
-        alert("Error fetching stock data");
-      }
     }
 
     async function fetchStocksList() {
@@ -398,11 +398,14 @@
       function getDateNMonthAgo(n) {
         const d = new Date();
         d.setMonth(d.getMonth() - n);
+        const today = new Date();
+        if (d > today) d.setTime(today.getTime());
         const year = d.getFullYear();
         const month = String(d.getMonth() + 1).padStart(2, "0");
         const day = String(d.getDate()).padStart(2, "0");
-        return year + "-" + month + "-" + day;
+        return `${year}-${month}-${day}`;
       }
+
 
       async function runWhatIf(symbol, months, shares) {
         const endDate = getDateNMonthAgo(0);

@@ -360,36 +360,49 @@ app.get('/stock-history', async (req, res) => {
 
 app.get("/whatIf", async (req, res) => {
   const { stockSymbol, period1, period2, interval, shares } = req.query;
-  if (!stockSymbol || !period1 || !period2 || !interval) {
+  if (!stockSymbol || !period1 || !period2 || !interval || !shares) {
     return res.status(400).json({ message: "Missing required query parameters" });
   }
+
+  const today = new Date();
+  const endDate = new Date(period2);
+  const startDate = new Date(period1);
+
+  // Prevent future dates
+  if (endDate > today) endDate.setTime(today.getTime());
+  if (startDate > today) startDate.setTime(today.getTime());
+
   try {
     const history = await yahooFinance.chart(stockSymbol, {
-      period1: period1, // start date
-      period2: period2, // end date 
-      interval: interval, // data interval
+      period1: startDate,
+      period2: endDate,
+      interval,
     });
-    console.log(period1, period2, interval);
 
     const quotes = history.quotes || [];
-    if (!quotes.length) {
-      return res.status(404).json({ message: "No historical data found" });
+    if (quotes.length === 0) {
+      return res.status(404).json({ message: "No historical data found for this period" });
     }
 
-    const historicalClose = quotes[0].close;
-    const quote = await yahooFinance.quote(`${stockSymbol}`);
-    const currentPrice = quote.regularMarketPrice;
+    const historicalClose = quotes[0].close || 0;
+    const quote = await yahooFinance.quote(stockSymbol);
+    const currentPrice = quote.regularMarketPrice || 0;
+
+    const diff = (currentPrice - historicalClose) * Number(shares);
+    const pct = historicalClose > 0 ? ((currentPrice - historicalClose) / historicalClose) * 100 : 0;
 
     res.json({
       historicalClose,
       currentPrice,
-      difference: ((currentPrice - historicalClose) * shares).toFixed(2),
-      percentChange: (((currentPrice - historicalClose) / historicalClose) * 100).toFixed(2)
+      difference: diff.toFixed(2),
+      percentChange: pct.toFixed(2)
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error fetching stock data" });
-  }});
+    console.error("whatIf error:", err);
+    res.status(500).json({ message: "Error fetching stock data", error: err.message });
+  }
+});
+
 
 
 app.listen(port, "0.0.0.0", () => {
