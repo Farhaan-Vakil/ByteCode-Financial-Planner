@@ -319,7 +319,7 @@
               `<td>${sym}</td>` +
               `<td>${sym}</td>` +
               `<td>$${price.toFixed(2)}</td>` +
-              `<td>${difference.toFixed(2)}</td>` +
+              `<td>$${difference.toFixed(2)}</td>` +
               `<td>${percentChange.toFixed(2)}%</td>`;
 
             stockTableBody.appendChild(tr);
