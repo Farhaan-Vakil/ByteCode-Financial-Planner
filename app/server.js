@@ -333,64 +333,90 @@ app.get('/stock-history', async (req, res) => {
 
   try {
     const period2 = new Date();
+    period2.setDate(period2.getDate() - 1);
+
     const period1 = new Date();
     period1.setFullYear(period1.getFullYear() - 1);
 
-    const result = await yahooFinance.chart(symbol, {
+    const result = await yahooFinance.chart(symbol.toUpperCase(), {
       period1,
       period2,
-      interval: '1mo',
+      interval: '1mo'
     });
 
-    if (!result?.quotes || result.quotes.length === 0) {
+    if (!result?.quotes?.length) {
       return res.status(404).json({ message: `No historical data found for ${symbol}` });
     }
 
     const formatted = result.quotes.map(q => ({
-      date: new Date(q.date).toISOString().split('T')[0],
-      close: q.close,
+      date: q.date.toISOString().split('T')[0],
+      close: q.close
     }));
 
     res.json(formatted);
+
   } catch (err) {
-    console.error("Error fetching stock history:", err);
-    res.status(500).json({ message: "Internal server error", error: err.message });
+    console.error("STOCK HISTORY ERROR:", err);
+    res.status(502).json({ message: "Failed to fetch stock history" });
   }
 });
 
 app.get("/whatIf", async (req, res) => {
-  const { stockSymbol, period1, period2, interval, shares } = req.query;
-  if (!stockSymbol || !period1 || !period2 || !interval) {
-    return res.status(400).json({ message: "Missing required query parameters" });
-  }
   try {
-    const history = await yahooFinance.chart(stockSymbol, {
-      period1: period1, // start date
-      period2: period2, // end date 
-      interval: interval, // data interval
-    });
-    console.log(period1, period2, interval);
+    let { stockSymbol, period1, period2, interval, shares } = req.query;
 
-    const quotes = history.quotes || [];
-    if (!quotes.length) {
+    if (!stockSymbol || !period1 || !period2 || !interval) {
+      return res.status(400).json({ message: "Missing required query parameters" });
+    }
+
+    stockSymbol = stockSymbol.toUpperCase().trim();
+
+    const parsedShares = Number(shares);
+    if (isNaN(parsedShares) || parsedShares <= 0) {
+      return res.status(400).json({ message: "Shares must be a valid number" });
+    }
+
+    const startDate = new Date(period1);
+    let endDate = new Date(period2);
+
+    if (isNaN(startDate) || isNaN(endDate)) {
+      return res.status(400).json({ message: "Invalid date format" });
+    }
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (endDate > yesterday) endDate = yesterday;
+
+    const history = await yahooFinance.chart(stockSymbol, {
+      period1: startDate,
+      period2: endDate,
+      interval
+    });
+
+    if (!history?.quotes?.length) {
       return res.status(404).json({ message: "No historical data found" });
     }
 
-    const historicalClose = quotes[0].close;
-    const quote = await yahooFinance.quote(`${stockSymbol}`);
-    const currentPrice = quote.regularMarketPrice;
+    const historicalClose = history.quotes[0].close;
+
+    const quote = await yahooFinance.quote(stockSymbol);
+    const currentPrice = quote?.regularMarketPrice;
+
+    if (!currentPrice || !historicalClose) {
+      return res.status(502).json({ message: "Invalid price data" });
+    }
 
     res.json({
       historicalClose,
       currentPrice,
-      difference: ((currentPrice - historicalClose) * shares).toFixed(2),
+      difference: ((currentPrice - historicalClose) * parsedShares).toFixed(2),
       percentChange: (((currentPrice - historicalClose) / historicalClose) * 100).toFixed(2)
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error fetching stock data" });
-  }});
 
+  } catch (err) {
+    console.error("WHATIF ERROR:", err);
+    res.status(502).json({ message: "Failed to fetch stock data" });
+  }
+});
 
 app.listen(port, "0.0.0.0", () => {
   console.log(`Server running at http://${"0.0.0.0"}:${port}/`);
