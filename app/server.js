@@ -30,7 +30,7 @@ const port = process.env.PORT || 3000;
 
 app.set('trust proxy', 1);
 const whatIfCache = new Map();
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_TTL_MS = 30 * 60 * 1000; 
 
 function getCache(key) {
   const entry = whatIfCache.get(key);
@@ -49,8 +49,13 @@ function setCache(key, data) {
   });
 }
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+let lastYahooCall = 0;
+
+async function yahooThrottle() {
+  const now = Date.now();
+  const wait = Math.max(0, 1100 - (now - lastYahooCall));
+  lastYahooCall = now + wait;
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
 }
 app.use(session({
   secret: "supersecretkey",        
@@ -353,10 +358,7 @@ app.get('/stock-history', async (req, res) => {
   const { symbol } = req.query;
   const requestId = Date.now();
 
-  if (!symbol) {
-    console.warn(`[HISTORY:${requestId}] Missing symbol`);
-    return res.status(400).json({ message: 'Stock symbol is required' });
-  }
+  if (!symbol) return res.json([]);
 
   try {
     const period2 = new Date();
@@ -367,6 +369,8 @@ app.get('/stock-history', async (req, res) => {
 
     const normalized = symbol.toUpperCase().replace(".", "-");
 
+    await yahooThrottle();
+
     console.log(`[HISTORY:${requestId}] Fetching`, normalized);
 
     const result = await yahooFinance.chart(normalized, {
@@ -375,10 +379,7 @@ app.get('/stock-history', async (req, res) => {
       interval: '1mo'
     });
 
-    if (!result?.quotes?.length) {
-      console.warn(`[HISTORY:${requestId}] No data`, normalized);
-      return res.json([]);
-    }
+    if (!result?.quotes?.length) return res.json([]);
 
     res.json(
       result.quotes.map(q => ({
@@ -388,11 +389,10 @@ app.get('/stock-history', async (req, res) => {
     );
 
   } catch (err) {
-    console.error(`[HISTORY:${requestId}] FAILED`, err.message);
+    console.error(`[HISTORY:${requestId}] BLOCKED`, err.message);
     res.json([]);
   }
 });
-
 
 app.get("/whatIf", async (req, res) => {
   const requestId = Date.now();
@@ -403,36 +403,31 @@ app.get("/whatIf", async (req, res) => {
     console.log(`[WHATIF:${requestId}] Incoming`, req.query);
 
     if (!stockSymbol || !period1 || !period2 || !interval) {
-      console.warn(`[WHATIF:${requestId}] Missing params`);
       return res.status(400).json({ message: "Missing required query parameters" });
     }
 
     stockSymbol = stockSymbol
       .toUpperCase()
       .trim()
-      .replace(".", "-"); 
+      .replace(".", "-");
 
     const parsedShares = Number(shares);
     if (isNaN(parsedShares) || parsedShares <= 0) {
-      console.warn(`[WHATIF:${requestId}] Invalid shares`, shares);
-      return res.status(400).json({ message: "Shares must be a valid number" });
+      return res.status(400).json({ message: "Invalid shares" });
     }
 
     const startDate = new Date(period1);
     let endDate = new Date(period2);
 
     if (isNaN(startDate) || isNaN(endDate)) {
-      console.warn(`[WHATIF:${requestId}] Invalid dates`, period1, period2);
       return res.status(400).json({ message: "Invalid date format" });
     }
 
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    if (endDate > yesterday) {
-      console.log(`[WHATIF:${requestId}] Clamped future date`, endDate);
-      endDate = yesterday;
-    }
+    if (endDate > yesterday) endDate = yesterday;
 
+    // ---------- CACHE ----------
     const cacheKey = `${stockSymbol}-${startDate.toISOString()}-${endDate.toISOString()}-${interval}-${parsedShares}`;
     const cached = getCache(cacheKey);
     if (cached) {
@@ -440,7 +435,7 @@ app.get("/whatIf", async (req, res) => {
       return res.json(cached);
     }
 
-    await sleep(150);
+    await yahooThrottle();
 
     console.log(`[WHATIF:${requestId}] Fetching history`, stockSymbol);
 
@@ -451,7 +446,6 @@ app.get("/whatIf", async (req, res) => {
     });
 
     if (!history?.quotes?.length) {
-      console.warn(`[WHATIF:${requestId}] No historical data`, stockSymbol);
       return res.json({
         historicalClose: null,
         currentPrice: null,
@@ -461,25 +455,19 @@ app.get("/whatIf", async (req, res) => {
       });
     }
 
-    const historicalClose = history.quotes[0].close;
+    const first = history.quotes[0];
+    const last = history.quotes[history.quotes.length - 1];
 
-    console.log(`[WHATIF:${requestId}] Fetching quote`, stockSymbol);
-
-    const quote = await yahooFinance.quote(stockSymbol);
-    const currentPrice = quote?.regularMarketPrice;
+    const historicalClose = first.close;
+    const currentPrice = last.close;
 
     if (!historicalClose || !currentPrice) {
-      console.warn(`[WHATIF:${requestId}] Missing price data`, {
-        historicalClose,
-        currentPrice
-      });
-
       return res.json({
-        historicalClose: historicalClose ?? null,
-        currentPrice: currentPrice ?? null,
+        historicalClose: null,
+        currentPrice: null,
         difference: 0,
         percentChange: 0,
-        error: "Price data unavailable"
+        error: "Invalid price data"
       });
     }
 
@@ -497,22 +485,18 @@ app.get("/whatIf", async (req, res) => {
     res.json(responseData);
 
   } catch (err) {
-    console.error(`[WHATIF:${requestId}] FAILED`, {
-      message: err.message,
-      name: err.name,
-      stack: err.stack,
-      query: req.query
-    });
+    console.error(`[WHATIF:${requestId}] BLOCKED`, err.message);
 
     res.json({
       historicalClose: null,
       currentPrice: null,
       difference: 0,
       percentChange: 0,
-      error: "External data source unavailable"
+      error: "Rate limited"
     });
   }
 });
+
 
 app.listen(port, "0.0.0.0", () => {
   console.log(`Server running at http://${"0.0.0.0"}:${port}/`);
