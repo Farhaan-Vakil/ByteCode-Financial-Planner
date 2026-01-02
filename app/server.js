@@ -29,7 +29,29 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.set('trust proxy', 1);
+const whatIfCache = new Map();
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
+function getCache(key) {
+  const entry = whatIfCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expires) {
+    whatIfCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCache(key, data) {
+  whatIfCache.set(key, {
+    data,
+    expires: Date.now() + CACHE_TTL_MS
+  });
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 app.use(session({
   secret: "supersecretkey",        
   resave: false,
@@ -329,7 +351,12 @@ app.get(`/stockNews`, (req,res) => {
 
 app.get('/stock-history', async (req, res) => {
   const { symbol } = req.query;
-  if (!symbol) return res.status(400).json({ message: 'Stock symbol is required' });
+  const requestId = Date.now();
+
+  if (!symbol) {
+    console.warn(`[HISTORY:${requestId}] Missing symbol`);
+    return res.status(400).json({ message: 'Stock symbol is required' });
+  }
 
   try {
     const period2 = new Date();
@@ -338,41 +365,56 @@ app.get('/stock-history', async (req, res) => {
     const period1 = new Date();
     period1.setFullYear(period1.getFullYear() - 1);
 
-    const result = await yahooFinance.chart(symbol.toUpperCase(), {
+    const normalized = symbol.toUpperCase().replace(".", "-");
+
+    console.log(`[HISTORY:${requestId}] Fetching`, normalized);
+
+    const result = await yahooFinance.chart(normalized, {
       period1,
       period2,
       interval: '1mo'
     });
 
     if (!result?.quotes?.length) {
-      return res.status(404).json({ message: `No historical data found for ${symbol}` });
+      console.warn(`[HISTORY:${requestId}] No data`, normalized);
+      return res.json([]);
     }
 
-    const formatted = result.quotes.map(q => ({
-      date: q.date.toISOString().split('T')[0],
-      close: q.close
-    }));
-
-    res.json(formatted);
+    res.json(
+      result.quotes.map(q => ({
+        date: q.date.toISOString().split('T')[0],
+        close: q.close
+      }))
+    );
 
   } catch (err) {
-    console.error("STOCK HISTORY ERROR:", err);
-    res.status(502).json({ message: "Failed to fetch stock history" });
+    console.error(`[HISTORY:${requestId}] FAILED`, err.message);
+    res.json([]);
   }
 });
 
+
 app.get("/whatIf", async (req, res) => {
+  const requestId = Date.now();
+
   try {
     let { stockSymbol, period1, period2, interval, shares } = req.query;
 
+    console.log(`[WHATIF:${requestId}] Incoming`, req.query);
+
     if (!stockSymbol || !period1 || !period2 || !interval) {
+      console.warn(`[WHATIF:${requestId}] Missing params`);
       return res.status(400).json({ message: "Missing required query parameters" });
     }
 
-    stockSymbol = stockSymbol.toUpperCase().trim();
+    stockSymbol = stockSymbol
+      .toUpperCase()
+      .trim()
+      .replace(".", "-"); 
 
     const parsedShares = Number(shares);
     if (isNaN(parsedShares) || parsedShares <= 0) {
+      console.warn(`[WHATIF:${requestId}] Invalid shares`, shares);
       return res.status(400).json({ message: "Shares must be a valid number" });
     }
 
@@ -380,11 +422,27 @@ app.get("/whatIf", async (req, res) => {
     let endDate = new Date(period2);
 
     if (isNaN(startDate) || isNaN(endDate)) {
+      console.warn(`[WHATIF:${requestId}] Invalid dates`, period1, period2);
       return res.status(400).json({ message: "Invalid date format" });
     }
+
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    if (endDate > yesterday) endDate = yesterday;
+    if (endDate > yesterday) {
+      console.log(`[WHATIF:${requestId}] Clamped future date`, endDate);
+      endDate = yesterday;
+    }
+
+    const cacheKey = `${stockSymbol}-${startDate.toISOString()}-${endDate.toISOString()}-${interval}-${parsedShares}`;
+    const cached = getCache(cacheKey);
+    if (cached) {
+      console.log(`[WHATIF:${requestId}] Cache hit`);
+      return res.json(cached);
+    }
+
+    await sleep(150);
+
+    console.log(`[WHATIF:${requestId}] Fetching history`, stockSymbol);
 
     const history = await yahooFinance.chart(stockSymbol, {
       period1: startDate,
@@ -393,28 +451,66 @@ app.get("/whatIf", async (req, res) => {
     });
 
     if (!history?.quotes?.length) {
-      return res.status(404).json({ message: "No historical data found" });
+      console.warn(`[WHATIF:${requestId}] No historical data`, stockSymbol);
+      return res.json({
+        historicalClose: null,
+        currentPrice: null,
+        difference: 0,
+        percentChange: 0,
+        error: "No historical data"
+      });
     }
 
     const historicalClose = history.quotes[0].close;
 
+    console.log(`[WHATIF:${requestId}] Fetching quote`, stockSymbol);
+
     const quote = await yahooFinance.quote(stockSymbol);
     const currentPrice = quote?.regularMarketPrice;
 
-    if (!currentPrice || !historicalClose) {
-      return res.status(502).json({ message: "Invalid price data" });
+    if (!historicalClose || !currentPrice) {
+      console.warn(`[WHATIF:${requestId}] Missing price data`, {
+        historicalClose,
+        currentPrice
+      });
+
+      return res.json({
+        historicalClose: historicalClose ?? null,
+        currentPrice: currentPrice ?? null,
+        difference: 0,
+        percentChange: 0,
+        error: "Price data unavailable"
+      });
     }
 
-    res.json({
+    const responseData = {
       historicalClose,
       currentPrice,
       difference: ((currentPrice - historicalClose) * parsedShares).toFixed(2),
       percentChange: (((currentPrice - historicalClose) / historicalClose) * 100).toFixed(2)
-    });
+    };
+
+    setCache(cacheKey, responseData);
+
+    console.log(`[WHATIF:${requestId}] Success`, responseData);
+
+    res.json(responseData);
 
   } catch (err) {
-    console.error("WHATIF ERROR:", err);
-    res.status(502).json({ message: "Failed to fetch stock data" });
+    console.error(`[WHATIF:${requestId}] FAILED`, {
+      message: err.message,
+      name: err.name,
+      stack: err.stack,
+      query: req.query
+    });
+
+    res.json({
+      historicalClose: null,
+      currentPrice: null,
+      difference: 0,
+      percentChange: 0,
+      error: "External data source unavailable"
+    });
   }
 });
 
