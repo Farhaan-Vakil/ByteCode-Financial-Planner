@@ -6,6 +6,12 @@
 
     Chart.register(ChartDataLabels);
 
+    const whatIfCache = new Map();
+    
+    function getCacheKey(symbol, months, shares) {
+      return `${symbol}-${months}-${shares}`;
+    }
+
     const incomeInput = document.getElementById("income");
     const payInterval = document.getElementById("payInterval");
     const percentSlider = document.getElementById("percentSlider");
@@ -65,25 +71,48 @@
       renderSavingsChart();
     }
 
+    async function fetchWhatIfCached(symbol, months = 12, shares = 1) {
+      const key = getCacheKey(symbol, months, shares);
+      if (whatIfCache.has(key)) {
+        return whatIfCache.get(key);
+      }
+    
+      const params = new URLSearchParams({
+        stockSymbol: symbol,
+        period1: getDateNMonthAgo(months),
+        period2: getDateNMonthAgo(0),
+        interval: "1d",
+        shares: String(shares)
+      });
+    
+      try {
+        const res = await fetch("/whatIf?" + params.toString());
+        if (!res.ok) throw new Error("fetch failed");
+        const data = await res.json();
+    
+        whatIfCache.set(key, data);
+        return data;
+      } catch (e) {
+        console.warn("WhatIf failed for", symbol);
+        return null;
+      }
+    }
+
     async function renderSavingsChart() {
       const yearlyIncome = getYearlyIncome();
       const totalExpenses = currentExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
       const invest = parseFloat(investAmount.textContent.replace("$", "")) || 0;
-      const savings = yearlyIncome - totalExpenses - invest;
-
+    
       let stockValue = 0;
+    
       for (const st of currentStocks) {
-        try {
-          const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(st.symbol)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=${st.amount}`);
-          const data = await res.json();
-          if (data && data.currentPrice) {
-            stockValue += Number(data.currentPrice) * Number(st.amount);
-          }
-        } catch (e) {
-          console.warn("Stock fetch failed for", st.symbol);
+        const data = await fetchWhatIfCached(st.symbol, 12, st.amount);
+        if (data && data.currentPrice) {
+          stockValue += Number(data.currentPrice) * Number(st.amount);
         }
       }
-
+    
+      const savings = yearlyIncome - totalExpenses - invest;
       const totalInvestments = invest + stockValue;
 
       const ctx = document.getElementById("savings_plan").getContext("2d");
@@ -142,21 +171,19 @@
       }
 
       async function renderStocks(stocks) {
-        stocksBody.innerHTML = "";
-        stockList.innerHTML = "";
-
-        for (const st of stocks) {
-          const symbol = st.symbol;
-          if (!symbol || !st.amount) continue;
-
-          try {
-            const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(symbol)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=${st.amount}`);
-            const data = await res.json();
+          stocksBody.innerHTML = "";
+          stockList.innerHTML = "";
+        
+          for (const st of stocks) {
+            const symbol = st.symbol;
+            if (!symbol || !st.amount) continue;
+        
+            const data = await fetchWhatIfCached(symbol, 12, st.amount);
             if (!data || !data.currentPrice) continue;
-
+        
             const price = Number(data.currentPrice);
             const total = (price * Number(st.amount)).toFixed(2);
-
+        
             const tr = document.createElement("tr");
             tr.innerHTML =
               `<td><a href="stockNews.html?stockSymbol=${symbol}">${symbol}</a></td>` +
@@ -164,61 +191,46 @@
               `<td>$${price.toFixed(2)}</td>` +
               `<td>$${total}</td>` +
               '<td><button class="btn delete-btn">Delete</button></td>';
-
-            const btn = tr.querySelector(".delete-btn");
-            btn.addEventListener("click", async () => {
-              const resDel = await fetch("/delete-stock", {
+        
+            tr.querySelector(".delete-btn").addEventListener("click", async () => {
+              await fetch("/delete-stock", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({ symbol }) // email removed
+                body: JSON.stringify({ symbol })
               });
-              if (resDel.ok) await loadDashboard();
-              else alert("Error deleting stock");
+              await loadDashboard();
             });
-
+        
             stocksBody.appendChild(tr);
-
+        
             const opt = document.createElement("option");
             opt.value = symbol;
             stockList.appendChild(opt);
-
-          } catch (e) {
-            console.error(`Failed to load stock ${symbol}`, e);
           }
         }
-      }
 
       async function loadStockPerformance(stocks) {
-        const ctx = document.getElementById("stock_performance").getContext("2d");
-        const labels = [];
-        const values = [];
-
-        for (const st of stocks) {
-          try {
-            const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(st.symbol)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=${st.amount}`);
-            const data = await res.json();
+          const ctx = document.getElementById("stock_performance").getContext("2d");
+          const labels = [];
+          const values = [];
+        
+          for (const st of stocks) {
+            const data = await fetchWhatIfCached(st.symbol, 12, st.amount);
             if (!data || !data.currentPrice) continue;
-
+        
             labels.push(st.symbol);
             values.push(Math.floor(Number(data.currentPrice) * Number(st.amount)));
-          } catch (e) {}
-        }
-
-        if (stockChart) stockChart.destroy();
-
-        stockChart = new Chart(ctx, {
-          type: "bar",
-          data: { labels: labels, datasets: [{ label: "Stock Value", data: values, backgroundColor: "#36a2eb" }] },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            indexAxis: "y",
-            plugins: { legend: { display: true }, datalabels: { display: false } },
-            scales: { x: { ticks: { callback: function(v) { return v; } } } }
           }
-        });
-      }
+        
+          if (stockChart) stockChart.destroy();
+        
+          stockChart = new Chart(ctx, {
+            type: "bar",
+            data: { labels, datasets: [{ label: "Stock Value", data: values }] },
+            options: { indexAxis: "y", responsive: true }
+          });
+        }
 
       async function loadStockHistory(stocks) {
         const ctx = document.getElementById("stock_history").getContext("2d");
@@ -250,37 +262,21 @@
       }
 
       async function searchStock() {
-        const sym = (stockSearch.value || "").toUpperCase();
-        if (!sym) { 
-          alert("Enter a stock symbol"); 
-          return; 
-        }
-
-        try {
-          const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(sym)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=1`);
-          const data = await res.json();
-          if (!data || !data.currentPrice) { 
-            alert("Stock not found"); 
-            return; 
-          }
-
-          const price = Number(data.currentPrice || 0);
-          const difference = Number(data.difference || 0);
-          const percentChange = Number(data.percentChange || 0);
-
+          const sym = (stockSearch.value || "").toUpperCase();
+          if (!sym) return alert("Enter a stock symbol");
+        
+          const data = await fetchWhatIfCached(sym, 12, 1);
+          if (!data || !data.currentPrice) return alert("Stock not found");
+        
           stockTableBody.innerHTML = `
             <tr>
               <td>${sym}</td>
               <td>${sym}</td>
-              <td>$${price.toFixed(2)}</td>
-              <td>$${difference.toFixed(2)}</td>
-              <td>${percentChange.toFixed(2)}%</td>
+              <td>$${Number(data.currentPrice).toFixed(2)}</td>
+              <td>$${Number(data.difference).toFixed(2)}</td>
+              <td>${Number(data.percentChange).toFixed(2)}%</td>
             </tr>`;
-        } catch (e) {
-          console.error(e);
-          alert("Error fetching stock data");
-        }
-      }
+    }
 
     async function fetchStocksList() {
         try {
@@ -333,59 +329,7 @@
           }
         }
       }
-      async function fetchStocksList() {
-        try {
-          const res = await fetch("/top100.json");
-          const data = await res.json();
-          if (Array.isArray(data) && data.length) { return data.slice(0, 15); }
-          return ["AAPL","MSFT","AMZN","GOOGL","META","NVDA","TSLA","BRK.B","UNH","JNJ","V","XOM","JPM","MA","HD"];
-        } catch (e) {
-          return ["AAPL","MSFT","AMZN","GOOGL","META","NVDA","TSLA","BRK.B","UNH","JNJ","V","XOM","JPM","MA","HD"];
-        }
-      }
-
-      async function fetchStocks() {
-        const symbols = await fetchStocksList();
-        stockTableBody.innerHTML = "";
-
-        for (const sym of symbols) {
-          try {
-            const yahooSym = sym.replace(".", "-");
-
-            const res = await fetch(`/whatIf?stockSymbol=${encodeURIComponent(yahooSym)}&period1=${getDateNMonthAgo(12)}&period2=${getDateNMonthAgo(0)}&interval=1d&shares=1`);
-            
-            if (!res.ok) {
-              console.warn(`Failed to fetch stock ${sym}: ${res.statusText}`);
-              continue;
-            }
-
-            const data = await res.json();
-
-            const price = Number(data.currentPrice || 0);
-            const difference = Number(data.difference || 0);
-            const percentChange = Number(data.percentChange || 0);
-
-            const tr = document.createElement("tr");
-            tr.innerHTML =
-              `<td>${sym}</td>` +
-              `<td>${sym}</td>` +
-              `<td>$${price.toFixed(2)}</td>` +
-              `<td>${difference.toFixed(2)}</td>` +
-              `<td>${percentChange.toFixed(2)}%</td>`;
-
-            stockTableBody.appendChild(tr);
-
-            const opt = document.createElement("option");
-            opt.value = sym;
-            stockList.appendChild(opt);
-
-          } catch (e) {
-            console.error(`Failed to fetch stock ${sym}`, e);
-          }
-        }
-      }
-
-
+      
       function getDateNMonthAgo(n) {
         const d = new Date();
         d.setMonth(d.getMonth() - n);
